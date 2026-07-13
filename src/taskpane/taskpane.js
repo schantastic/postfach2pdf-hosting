@@ -42,7 +42,6 @@
     el.batchIncludeHeaders = document.getElementById("mp-batch-include-headers");
     el.batchPageNumbers = document.getElementById("mp-batch-page-numbers");
     el.batchStart = document.getElementById("mp-batch-start");
-    el.debug = document.getElementById("mp-debug");
 
     if (!Office.context.requirements.isSetSupported("Mailbox", "1.8")) {
       el.unsupported.hidden = false;
@@ -52,11 +51,6 @@
     }
 
     el.shared.hidden = false;
-
-    debugLog(
-      "Office.onReady - currentItem vorhanden: " + !!currentItem() +
-        " - Mailbox 1.13 unterstuetzt: " + Office.context.requirements.isSetSupported("Mailbox", "1.13")
-    );
 
     if (currentItem()) {
       initSingleItemMode();
@@ -108,16 +102,6 @@
       }).format(date);
     } catch (e) {
       return date.toString();
-    }
-  }
-
-  // Temporaer zur Fehlersuche: schreibt zusaetzlich zu console.log direkt
-  // sichtbar auf die Seite, weil die Browser-Konsole in Outlooks
-  // verschachtelten iframes schwer zu finden ist.
-  function debugLog(text) {
-    console.log("Postfach2PDF: " + text);
-    if (el.debug) {
-      el.debug.textContent += new Date().toLocaleTimeString("de-DE") + "  " + text + "\n";
     }
   }
 
@@ -557,7 +541,7 @@
     return new Promise(function (resolve) {
       item.unloadAsync(function (result) {
         if (result.status !== Office.AsyncResultStatus.Succeeded) {
-          debugLog("unloadAsync fehlgeschlagen: " + JSON.stringify(result.error));
+          console.warn("Postfach2PDF: unloadAsync fehlgeschlagen", result.error);
         }
         resolve();
       });
@@ -565,8 +549,6 @@
   }
 
   async function initBatchMode() {
-    debugLog("initBatchMode gestartet (kein einzelnes Element aktiv, Mailbox 1.13 unterstuetzt)");
-    debugLog("Office.MailboxEnums.ItemType.Message hat den Wert: " + JSON.stringify(Office.MailboxEnums.ItemType.Message));
     el.batch.hidden = false;
     el.batchStart.addEventListener("click", onBatchStartClicked);
 
@@ -575,15 +557,10 @@
     // Event, nicht automatisch.
     Office.context.mailbox.addHandlerAsync(
       Office.EventType.SelectedItemsChanged,
-      function () {
-        debugLog("SelectedItemsChanged-Event ausgeloest");
-        refreshBatchSelection();
-      },
+      refreshBatchSelection,
       function (result) {
         if (result.status !== Office.AsyncResultStatus.Succeeded) {
-          debugLog("SelectedItemsChanged-Handler konnte nicht registriert werden: " + JSON.stringify(result.error));
-        } else {
-          debugLog("SelectedItemsChanged-Handler erfolgreich registriert");
+          console.warn("Postfach2PDF: SelectedItemsChanged-Handler konnte nicht registriert werden", result.error);
         }
       }
     );
@@ -595,7 +572,7 @@
     try {
       batchSelection = await getSelectedItemsAsync();
     } catch (error) {
-      debugLog("Mehrfachauswahl konnte nicht gelesen werden: " + JSON.stringify(error));
+      console.error("Postfach2PDF: Mehrfachauswahl konnte nicht gelesen werden", error);
       batchSelection = [];
     }
 
@@ -620,17 +597,8 @@
 
       try {
         batchSelection = await getSelectedItemsAsync();
-        debugLog(
-          "getSelectedItemsAsync (Versuch " + (i + 1) + "/" + retryDelaysMs.length + ") ergab " +
-            batchSelection.length + " Element(e): " +
-            JSON.stringify(
-              batchSelection.map(function (m) {
-                return { itemType: m.itemType, itemMode: m.itemMode, subject: m.subject };
-              })
-            )
-        );
       } catch (error) {
-        debugLog("Mehrfachauswahl konnte nicht gelesen werden: " + JSON.stringify(error));
+        console.error("Postfach2PDF: Mehrfachauswahl konnte nicht gelesen werden", error);
         batchSelection = [];
       }
 
@@ -838,7 +806,7 @@
         setStatus(failedCount + " von " + messages.length + " E-Mails hatten Probleme, siehe Ergebnis.", "error");
       }
     } catch (error) {
-      debugLog("Batch-Verarbeitung fehlgeschlagen: " + JSON.stringify(error));
+      console.error("Postfach2PDF: Batch-Verarbeitung fehlgeschlagen", error);
       setStatus(
         "Fehler bei der Batch-Verarbeitung: " + (error && error.message ? error.message : error),
         "error"
