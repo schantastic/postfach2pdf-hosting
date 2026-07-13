@@ -551,6 +551,7 @@
 
   async function initBatchMode() {
     debugLog("initBatchMode gestartet (kein einzelnes Element aktiv, Mailbox 1.13 unterstuetzt)");
+    debugLog("Office.MailboxEnums.ItemType.Message hat den Wert: " + JSON.stringify(Office.MailboxEnums.ItemType.Message));
     el.batch.hidden = false;
     el.batchStart.addEventListener("click", onBatchStartClicked);
 
@@ -618,9 +619,7 @@
         batchSelection = [];
       }
 
-      var hasMessages = batchSelection.some(function (m) {
-        return m.itemType === Office.MailboxEnums.ItemType.Message;
-      });
+      var hasMessages = batchSelection.some(isMessageItem);
       if (hasMessages) {
         break;
       }
@@ -629,12 +628,19 @@
     renderBatchList();
   }
 
+  // Diagnose zeigte: getSelectedItemsAsync liefert Elemente mit
+  // itemType "Message" (String), der direkte Vergleich gegen
+  // Office.MailboxEnums.ItemType.Message matchte trotzdem nicht - deshalb
+  // hier zusaetzlich gegen den literalen String verglichen statt sich
+  // allein auf den Enum-Wert zu verlassen.
+  function isMessageItem(m) {
+    return m.itemType === Office.MailboxEnums.ItemType.Message || m.itemType === "Message";
+  }
+
   function renderBatchList() {
     el.batchList.innerHTML = "";
 
-    var messages = batchSelection.filter(function (m) {
-      return m.itemType === Office.MailboxEnums.ItemType.Message;
-    });
+    var messages = batchSelection.filter(isMessageItem);
 
     if (messages.length === 0) {
       el.batchEmpty.hidden = false;
