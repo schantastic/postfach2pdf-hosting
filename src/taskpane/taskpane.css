@@ -71,6 +71,13 @@ code,
   padding: 16px;
 }
 
+/* #mp-shared (Status + Ergebnis) liegt ausserhalb von <main class="mp-app">
+   und braucht daher dasselbe horizontale Padding, damit es buendig mit
+   Anhaengen/Optionen/Button darueber ausgerichtet ist. */
+#mp-shared {
+  padding: 0 16px;
+}
+
 .mp-summary {
   border: 1px solid var(--mp-border);
   border-radius: var(--mp-radius-md);
