@@ -276,10 +276,17 @@ code,
   padding: 1px 4px;
 }
 
+/* html2canvas (vendorte Version) misst bei position: absolute/fixed eine
+   Hoehe von 0, egal welcher Offset - deshalb bleibt der Render-Container
+   im normalen Dokumentfluss (position: static) und wird stattdessen durch
+   einen 0x0-Wrapper mit overflow: hidden unsichtbar gemacht. */
+.mp-render-root-clip {
+  height: 0;
+  width: 0;
+  overflow: hidden;
+}
+
 .mp-render-root {
-  position: absolute;
-  left: -10000px;
-  top: 0;
   width: 800px;
 }
 
