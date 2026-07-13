@@ -384,6 +384,9 @@
     ".mp-pdf-body table { max-width: 100%; }" +
     "</style>";
 
+  // Muss mit der Breite von .mp-render-root in taskpane.css uebereinstimmen.
+  var RENDER_ROOT_WIDTH = 800;
+
   async function renderEmailHtmlToPdfBytes(item, bodyHtml, options, attachmentsForHeader) {
     var documentHtml = buildDocumentHtml(item, bodyHtml, options, attachmentsForHeader);
     el.renderRoot.innerHTML = PDF_DOCUMENT_STYLE + documentHtml;
@@ -391,7 +394,20 @@
       return await html2pdf()
         .set({
           margin: [15, 12, 15, 12],
-          html2canvas: { scale: 2, useCORS: false },
+          // windowWidth/width/x/y explizit setzen: ohne diese Angaben
+          // berechnet diese html2canvas-Version einen falschen
+          // horizontalen Ausschnitt (fester Versatz von ca. 259px,
+          // unabhaengig vom Inhalt) und schneidet den linken Rand +
+          // Teile des Textes ab. Lokal mit Playwright/Chromium gegen
+          // die vendorte Bibliothek reproduziert und verifiziert.
+          html2canvas: {
+            scale: 2,
+            useCORS: false,
+            windowWidth: RENDER_ROOT_WIDTH,
+            width: RENDER_ROOT_WIDTH,
+            x: 0,
+            y: 0,
+          },
           jsPDF: { unit: "pt", format: "a4", orientation: "portrait" },
           pagebreak: { mode: ["css", "legacy"] },
         })
