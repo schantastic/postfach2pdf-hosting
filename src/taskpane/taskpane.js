@@ -550,7 +550,7 @@
       }
     );
 
-    await refreshBatchSelection();
+    await refreshBatchSelectionWithRetry();
   }
 
   async function refreshBatchSelection() {
@@ -559,6 +559,40 @@
     } catch (error) {
       console.error("Postfach2PDF: Mehrfachauswahl konnte nicht gelesen werden", error);
       batchSelection = [];
+    }
+
+    renderBatchList();
+  }
+
+  // Direkt nach dem Laden der Taskpane kann getSelectedItemsAsync kurzzeitig
+  // leer zurueckkommen, weil Outlook die Auswahl noch nicht an die Taskpane
+  // durchgereicht hat (das offizielle Microsoft-Beispiel verlaesst sich
+  // deshalb ausschliesslich auf das SelectedItemsChanged-Event statt auf
+  // einen sofortigen Aufruf). Hier stattdessen ein paar Mal mit kurzer
+  // Verzoegerung erneut versuchen, bevor "keine Auswahl" angezeigt wird.
+  async function refreshBatchSelectionWithRetry() {
+    var retryDelaysMs = [0, 300, 600, 1200];
+
+    for (var i = 0; i < retryDelaysMs.length; i++) {
+      if (retryDelaysMs[i] > 0) {
+        await new Promise(function (resolve) {
+          setTimeout(resolve, retryDelaysMs[i]);
+        });
+      }
+
+      try {
+        batchSelection = await getSelectedItemsAsync();
+      } catch (error) {
+        console.error("Postfach2PDF: Mehrfachauswahl konnte nicht gelesen werden", error);
+        batchSelection = [];
+      }
+
+      var hasMessages = batchSelection.some(function (m) {
+        return m.itemType === Office.MailboxEnums.ItemType.Message;
+      });
+      if (hasMessages) {
+        break;
+      }
     }
 
     renderBatchList();
