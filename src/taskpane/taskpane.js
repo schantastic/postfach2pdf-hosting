@@ -549,6 +549,21 @@
     });
   }
 
+  // Laut Microsoft-Doku darf immer nur eine per loadItemByIdAsync geladene
+  // Nachricht gleichzeitig geladen sein - ohne unloadAsync vor dem naechsten
+  // loadItemByIdAsync schlaegt der Batch-Modus ab der zweiten Mail fehl
+  // ("Das Element ist nicht vorhanden oder wurde nicht erstellt.").
+  function unloadItemAsync(item) {
+    return new Promise(function (resolve) {
+      item.unloadAsync(function (result) {
+        if (result.status !== Office.AsyncResultStatus.Succeeded) {
+          debugLog("unloadAsync fehlgeschlagen: " + JSON.stringify(result.error));
+        }
+        resolve();
+      });
+    });
+  }
+
   async function initBatchMode() {
     debugLog("initBatchMode gestartet (kein einzelnes Element aktiv, Mailbox 1.13 unterstuetzt)");
     debugLog("Office.MailboxEnums.ItemType.Message hat den Wert: " + JSON.stringify(Office.MailboxEnums.ItemType.Message));
@@ -714,18 +729,22 @@
     for (var i = 0; i < messages.length; i++) {
       setStatus("Lade E-Mail " + (i + 1) + "/" + messages.length + ": " + (messages[i].subject || "") + " ...");
       var item = await loadItemByIdAsync(messages[i].itemId);
-      var attachments = nonInlineAttachments(item);
-      var itemResults = [];
-      await renderEmailPagesInto(item, options, attachments, mergedPdf, itemResults, function (attachment, j, total) {
-        setStatus(
-          "E-Mail " + (i + 1) + "/" + messages.length + " – Anhang " + (j + 1) + "/" + total + ": " + attachment.name + " ..."
-        );
-      });
-      overallResults.push({
-        name: messages[i].subject || "(kein Betreff)",
-        status: itemResults.some(function (r) { return r.status !== "embedded"; }) ? "failed" : "embedded",
-        reason: "in gemeinsame PDF eingebettet (" + itemResults.length + " Anhang-Ergebnisse)",
-      });
+      try {
+        var attachments = nonInlineAttachments(item);
+        var itemResults = [];
+        await renderEmailPagesInto(item, options, attachments, mergedPdf, itemResults, function (attachment, j, total) {
+          setStatus(
+            "E-Mail " + (i + 1) + "/" + messages.length + " – Anhang " + (j + 1) + "/" + total + ": " + attachment.name + " ..."
+          );
+        });
+        overallResults.push({
+          name: messages[i].subject || "(kein Betreff)",
+          status: itemResults.some(function (r) { return r.status !== "embedded"; }) ? "failed" : "embedded",
+          reason: "in gemeinsame PDF eingebettet (" + itemResults.length + " Anhang-Ergebnisse)",
+        });
+      } finally {
+        await unloadItemAsync(item);
+      }
     }
 
     if (options.pageNumbers) {
@@ -745,34 +764,38 @@
     for (var i = 0; i < messages.length; i++) {
       setStatus("Lade E-Mail " + (i + 1) + "/" + messages.length + ": " + (messages[i].subject || "") + " ...");
       var item = await loadItemByIdAsync(messages[i].itemId);
-      var attachments = nonInlineAttachments(item);
-      var itemResults = [];
+      try {
+        var attachments = nonInlineAttachments(item);
+        var itemResults = [];
 
-      var singleDoc = await PDFLib.PDFDocument.create();
-      singleDoc.setProducer("Postfach2PDF (schantastic)");
-      singleDoc.setCreator("Postfach2PDF");
-      singleDoc.setTitle(item.subject || "E-Mail");
-      singleDoc.setCreationDate(new Date());
+        var singleDoc = await PDFLib.PDFDocument.create();
+        singleDoc.setProducer("Postfach2PDF (schantastic)");
+        singleDoc.setCreator("Postfach2PDF");
+        singleDoc.setTitle(item.subject || "E-Mail");
+        singleDoc.setCreationDate(new Date());
 
-      await renderEmailPagesInto(item, options, attachments, singleDoc, itemResults, function (attachment, j, total) {
-        setStatus(
-          "E-Mail " + (i + 1) + "/" + messages.length + " – Anhang " + (j + 1) + "/" + total + ": " + attachment.name + " ..."
-        );
-      });
+        await renderEmailPagesInto(item, options, attachments, singleDoc, itemResults, function (attachment, j, total) {
+          setStatus(
+            "E-Mail " + (i + 1) + "/" + messages.length + " – Anhang " + (j + 1) + "/" + total + ": " + attachment.name + " ..."
+          );
+        });
 
-      if (options.pageNumbers) {
-        await Postfach2PdfCore.addPageNumbers(singleDoc);
+        if (options.pageNumbers) {
+          await Postfach2PdfCore.addPageNumbers(singleDoc);
+        }
+
+        var bytes = await singleDoc.save();
+        var fileName = buildFileName(item);
+        Postfach2PdfCore.downloadBytes(bytes, fileName);
+
+        overallResults.push({
+          name: messages[i].subject || "(kein Betreff)",
+          status: itemResults.some(function (r) { return r.status !== "embedded"; }) ? "failed" : "embedded",
+          reason: "als eigene PDF (" + fileName + ") gespeichert",
+        });
+      } finally {
+        await unloadItemAsync(item);
       }
-
-      var bytes = await singleDoc.save();
-      var fileName = buildFileName(item);
-      Postfach2PdfCore.downloadBytes(bytes, fileName);
-
-      overallResults.push({
-        name: messages[i].subject || "(kein Betreff)",
-        status: itemResults.some(function (r) { return r.status !== "embedded"; }) ? "failed" : "embedded",
-        reason: "als eigene PDF (" + fileName + ") gespeichert",
-      });
 
       // Kurze Pause, damit Browser mehrere aufeinanderfolgende Downloads
       // zuverlaessiger zulassen.
@@ -815,7 +838,7 @@
         setStatus(failedCount + " von " + messages.length + " E-Mails hatten Probleme, siehe Ergebnis.", "error");
       }
     } catch (error) {
-      console.error("Postfach2PDF: Batch-Verarbeitung fehlgeschlagen", error);
+      debugLog("Batch-Verarbeitung fehlgeschlagen: " + JSON.stringify(error));
       setStatus(
         "Fehler bei der Batch-Verarbeitung: " + (error && error.message ? error.message : error),
         "error"
