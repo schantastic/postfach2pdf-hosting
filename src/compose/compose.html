@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Postfach2PDF – Anhänge konvertieren</title>
+
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script src="../lib/pdf-lib.min.js"></script>
+  <script src="../lib/postfach2pdf-core.js"></script>
+  <link rel="stylesheet" href="../taskpane/taskpane.css" />
+</head>
+<body>
+  <header class="mp-header">
+    <img src="../../assets/schantastic-mark-64.png" alt="schantastic" width="28" height="28" />
+    <div class="mp-header-text">
+      <h1>Postfach2PDF</h1>
+      <span class="mp-header-byline">by schantastic</span>
+    </div>
+  </header>
+
+  <main id="mp-app" class="mp-app" hidden>
+    <section class="mp-attachments-section">
+      <h2 class="mp-section-title">Anhänge dieser Nachricht</h2>
+      <ul id="mp-attachment-list" class="mp-attachment-list"></ul>
+      <p id="mp-no-attachments" class="mp-note" hidden>Diese Nachricht hat noch keine Anhänge.</p>
+    </section>
+
+    <section class="mp-options">
+      <h2 class="mp-section-title">Optionen</h2>
+      <label class="mp-checkbox">
+        <input type="checkbox" id="mp-merge" checked />
+        Ausgewählte Anhänge zu einer gemeinsamen PDF zusammenfassen
+      </label>
+      <label class="mp-checkbox">
+        <input type="checkbox" id="mp-remove-originals" checked />
+        Original-Anhänge nach erfolgreicher Konvertierung entfernen
+      </label>
+    </section>
+
+    <section class="mp-actions">
+      <button id="mp-convert" class="mp-button-primary">Anhänge in PDF umwandeln</button>
+      <span id="mp-status" class="mp-status" role="status" aria-live="polite"></span>
+    </section>
+
+    <section id="mp-result" class="mp-result" hidden>
+      <h2 class="mp-section-title">Ergebnis</h2>
+      <ul id="mp-result-list" class="mp-result-list"></ul>
+    </section>
+
+    <section class="mp-note">
+      <p>
+        Nur PDF- und Bildanhänge (JPG/PNG/GIF/BMP/WEBP) können automatisch
+        konvertiert werden – solche Zeilen sind unten deaktiviert markiert.
+        Nicht unterstützte Anhänge bleiben unverändert an der Nachricht.
+      </p>
+      <p>
+        Bei einem Fehler bei einem einzelnen Anhang bleibt genau dieser
+        Original-Anhang unangetastet erhalten. Die Nachricht wird
+        <strong>nie</strong> automatisch gesendet.
+      </p>
+    </section>
+  </main>
+
+  <p id="mp-unsupported" class="mp-note" hidden>
+    Dieses Outlook unterstützt die für Postfach2PDF benötigte Mailbox-API (1.8) nicht.
+  </p>
+
+  <footer class="mp-footer">
+    <span class="mp-footer-tagline">simply fantastic solutions</span>
+    <span class="mp-footer-copyright">
+      © 2026 <a href="https://schantastic.com" target="_blank" rel="noopener noreferrer">schantastic e.U.</a> · Alle Rechte vorbehalten.
+    </span>
+  </footer>
+
+  <div id="mp-render-root" class="mp-render-root"></div>
+
+  <script src="compose.js"></script>
+</body>
+</html>

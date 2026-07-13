@@ -1,0 +1,315 @@
+/* Postfach2PDF – Taskpane-Styles
+   Farb-/Typografie-Tokens 1:1 aus dem schantastic.com Design-System
+   uebernommen (src/app/globals.css, Header.tsx, Footer.tsx dieses
+   Schwesterprojekts), nicht neu erfunden. */
+
+:root {
+  --mp-blue: #4778f5;
+  --mp-blue-dark: #3461d9;
+  --mp-blue-tint: #eef3fe;
+  --mp-blue-tint-border: #c7d7fc;
+  --mp-navy: #1e2c3a;
+  --mp-muted: #5f6b78;
+  --mp-faint: #9aa0a6;
+  --mp-surface: #f7f9fc;
+  --mp-border: #e4eaf2;
+  --mp-white: #ffffff;
+  --mp-success: #1a7f37;
+  --mp-danger: #d92d20;
+  --mp-radius-sm: 6px;
+  --mp-radius-md: 10px;
+  --mp-radius-lg: 12px;
+}
+
+body {
+  font-family: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  margin: 0;
+  padding: 0;
+  color: var(--mp-navy);
+  background: var(--mp-white);
+}
+
+code,
+.mp-mono {
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.mp-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--mp-border);
+}
+
+.mp-header img {
+  border-radius: 6px;
+}
+
+.mp-header-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.mp-header h1 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--mp-navy);
+}
+
+.mp-header-byline {
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--mp-faint);
+}
+
+.mp-app {
+  padding: 16px;
+}
+
+.mp-summary {
+  border: 1px solid var(--mp-border);
+  border-radius: var(--mp-radius-md);
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  background: var(--mp-white);
+}
+
+.mp-row {
+  display: flex;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.mp-label {
+  width: 70px;
+  flex-shrink: 0;
+  color: var(--mp-muted);
+}
+
+.mp-value {
+  overflow-wrap: anywhere;
+}
+
+.mp-section-title {
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--mp-faint);
+  margin: 0 0 8px 0;
+  font-weight: 600;
+}
+
+.mp-attachments-section {
+  margin-bottom: 14px;
+}
+
+.mp-attachment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--mp-border);
+  border-radius: var(--mp-radius-md);
+  max-height: 160px;
+  overflow-y: auto;
+  background: var(--mp-white);
+}
+
+.mp-attachment-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  border-bottom: 1px solid var(--mp-border);
+}
+
+.mp-attachment-item:last-child {
+  border-bottom: none;
+}
+
+.mp-attachment-item input[type="checkbox"] {
+  margin-top: 2px;
+  flex-shrink: 0;
+  accent-color: var(--mp-blue);
+}
+
+.mp-attachment-meta {
+  overflow-wrap: anywhere;
+}
+
+.mp-attachment-name {
+  display: block;
+}
+
+.mp-attachment-detail {
+  display: block;
+  color: var(--mp-faint);
+  font-size: 11px;
+}
+
+.mp-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.mp-checkbox {
+  font-size: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--mp-navy);
+}
+
+.mp-checkbox input[type="checkbox"] {
+  accent-color: var(--mp-blue);
+  margin-top: 1px;
+}
+
+.mp-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.mp-button-primary {
+  background: var(--mp-blue);
+  color: var(--mp-white);
+  border: none;
+  border-radius: var(--mp-radius-lg);
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(71, 120, 245, 0.3);
+  transition: box-shadow 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.mp-button-primary:disabled {
+  background: #aac0f9;
+  box-shadow: none;
+  cursor: default;
+}
+
+.mp-button-primary:hover:not(:disabled) {
+  box-shadow: 0 4px 20px rgba(71, 120, 245, 0.42);
+  transform: translateY(-1px);
+}
+
+.mp-button-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.mp-status {
+  font-size: 12px;
+  color: var(--mp-muted);
+}
+
+.mp-status[data-state="error"] {
+  color: var(--mp-danger);
+  font-weight: 600;
+}
+
+.mp-status[data-state="success"] {
+  color: var(--mp-success);
+  font-weight: 600;
+}
+
+.mp-result {
+  border: 1px solid var(--mp-border);
+  border-radius: var(--mp-radius-md);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  background: var(--mp-white);
+}
+
+.mp-result-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 12px;
+}
+
+.mp-result-list li {
+  padding: 3px 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.mp-result-icon {
+  flex-shrink: 0;
+  font-weight: 700;
+}
+
+.mp-result-icon[data-kind="ok"] {
+  color: var(--mp-success);
+}
+
+.mp-result-icon[data-kind="warn"] {
+  color: var(--mp-danger);
+}
+
+.mp-result-icon[data-kind="skip"] {
+  color: var(--mp-faint);
+}
+
+.mp-note {
+  font-size: 11px;
+  color: var(--mp-muted);
+  line-height: 1.5;
+}
+
+.mp-note code {
+  background: var(--mp-surface);
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
+.mp-render-root {
+  position: absolute;
+  left: -10000px;
+  top: 0;
+  width: 800px;
+}
+
+.mp-footer {
+  margin-top: 8px;
+  padding: 14px 16px 18px;
+  border-top: 1px solid var(--mp-border);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mp-footer-tagline {
+  font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--mp-faint);
+}
+
+.mp-footer-copyright {
+  font-size: 11px;
+  color: var(--mp-faint);
+}
+
+.mp-footer-copyright a {
+  color: var(--mp-faint);
+  text-decoration: none;
+}
+
+.mp-footer-copyright a:hover {
+  color: var(--mp-blue);
+}
