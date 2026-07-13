@@ -537,6 +537,23 @@
     el.batch.hidden = false;
     el.batchStart.addEventListener("click", onBatchStartClicked);
 
+    // Laut Microsoft-Doku zum Mehrfachauswahl-Feature aktualisiert sich
+    // die Auswahl waehrend die Taskpane offen bleibt nur ueber dieses
+    // Event, nicht automatisch.
+    Office.context.mailbox.addHandlerAsync(
+      Office.EventType.SelectedItemsChanged,
+      refreshBatchSelection,
+      function (result) {
+        if (result.status !== Office.AsyncResultStatus.Succeeded) {
+          console.warn("Postfach2PDF: SelectedItemsChanged-Handler konnte nicht registriert werden", result.error);
+        }
+      }
+    );
+
+    await refreshBatchSelection();
+  }
+
+  async function refreshBatchSelection() {
     try {
       batchSelection = await getSelectedItemsAsync();
     } catch (error) {
