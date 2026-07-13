@@ -42,6 +42,7 @@
     el.batchIncludeHeaders = document.getElementById("mp-batch-include-headers");
     el.batchPageNumbers = document.getElementById("mp-batch-page-numbers");
     el.batchStart = document.getElementById("mp-batch-start");
+    el.debug = document.getElementById("mp-debug");
 
     if (!Office.context.requirements.isSetSupported("Mailbox", "1.8")) {
       el.unsupported.hidden = false;
@@ -52,11 +53,9 @@
 
     el.shared.hidden = false;
 
-    console.log(
-      "Postfach2PDF: Office.onReady - currentItem vorhanden:",
-      !!currentItem(),
-      "- Mailbox 1.13 unterstuetzt:",
-      Office.context.requirements.isSetSupported("Mailbox", "1.13")
+    debugLog(
+      "Office.onReady - currentItem vorhanden: " + !!currentItem() +
+        " - Mailbox 1.13 unterstuetzt: " + Office.context.requirements.isSetSupported("Mailbox", "1.13")
     );
 
     if (currentItem()) {
@@ -109,6 +108,16 @@
       }).format(date);
     } catch (e) {
       return date.toString();
+    }
+  }
+
+  // Temporaer zur Fehlersuche: schreibt zusaetzlich zu console.log direkt
+  // sichtbar auf die Seite, weil die Browser-Konsole in Outlooks
+  // verschachtelten iframes schwer zu finden ist.
+  function debugLog(text) {
+    console.log("Postfach2PDF: " + text);
+    if (el.debug) {
+      el.debug.textContent += new Date().toLocaleTimeString("de-DE") + "  " + text + "\n";
     }
   }
 
@@ -541,7 +550,7 @@
   }
 
   async function initBatchMode() {
-    console.log("Postfach2PDF: initBatchMode gestartet (kein einzelnes Element aktiv, Mailbox 1.13 unterstuetzt)");
+    debugLog("initBatchMode gestartet (kein einzelnes Element aktiv, Mailbox 1.13 unterstuetzt)");
     el.batch.hidden = false;
     el.batchStart.addEventListener("click", onBatchStartClicked);
 
@@ -551,14 +560,14 @@
     Office.context.mailbox.addHandlerAsync(
       Office.EventType.SelectedItemsChanged,
       function () {
-        console.log("Postfach2PDF: SelectedItemsChanged-Event ausgeloest");
+        debugLog("SelectedItemsChanged-Event ausgeloest");
         refreshBatchSelection();
       },
       function (result) {
         if (result.status !== Office.AsyncResultStatus.Succeeded) {
-          console.warn("Postfach2PDF: SelectedItemsChanged-Handler konnte nicht registriert werden", result.error);
+          debugLog("SelectedItemsChanged-Handler konnte nicht registriert werden: " + JSON.stringify(result.error));
         } else {
-          console.log("Postfach2PDF: SelectedItemsChanged-Handler erfolgreich registriert");
+          debugLog("SelectedItemsChanged-Handler erfolgreich registriert");
         }
       }
     );
@@ -570,7 +579,7 @@
     try {
       batchSelection = await getSelectedItemsAsync();
     } catch (error) {
-      console.error("Postfach2PDF: Mehrfachauswahl konnte nicht gelesen werden", error);
+      debugLog("Mehrfachauswahl konnte nicht gelesen werden: " + JSON.stringify(error));
       batchSelection = [];
     }
 
@@ -595,15 +604,17 @@
 
       try {
         batchSelection = await getSelectedItemsAsync();
-        console.log(
-          "Postfach2PDF: getSelectedItemsAsync (Versuch " + (i + 1) + "/" + retryDelaysMs.length + ") ergab " +
-            batchSelection.length + " Element(e):",
-          batchSelection.map(function (m) {
-            return { itemType: m.itemType, itemMode: m.itemMode, subject: m.subject };
-          })
+        debugLog(
+          "getSelectedItemsAsync (Versuch " + (i + 1) + "/" + retryDelaysMs.length + ") ergab " +
+            batchSelection.length + " Element(e): " +
+            JSON.stringify(
+              batchSelection.map(function (m) {
+                return { itemType: m.itemType, itemMode: m.itemMode, subject: m.subject };
+              })
+            )
         );
       } catch (error) {
-        console.error("Postfach2PDF: Mehrfachauswahl konnte nicht gelesen werden", error);
+        debugLog("Mehrfachauswahl konnte nicht gelesen werden: " + JSON.stringify(error));
         batchSelection = [];
       }
 
