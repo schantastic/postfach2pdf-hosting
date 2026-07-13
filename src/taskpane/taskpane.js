@@ -52,6 +52,13 @@
 
     el.shared.hidden = false;
 
+    console.log(
+      "Postfach2PDF: Office.onReady - currentItem vorhanden:",
+      !!currentItem(),
+      "- Mailbox 1.13 unterstuetzt:",
+      Office.context.requirements.isSetSupported("Mailbox", "1.13")
+    );
+
     if (currentItem()) {
       initSingleItemMode();
     } else if (Office.context.requirements.isSetSupported("Mailbox", "1.13")) {
@@ -534,6 +541,7 @@
   }
 
   async function initBatchMode() {
+    console.log("Postfach2PDF: initBatchMode gestartet (kein einzelnes Element aktiv, Mailbox 1.13 unterstuetzt)");
     el.batch.hidden = false;
     el.batchStart.addEventListener("click", onBatchStartClicked);
 
@@ -542,10 +550,15 @@
     // Event, nicht automatisch.
     Office.context.mailbox.addHandlerAsync(
       Office.EventType.SelectedItemsChanged,
-      refreshBatchSelection,
+      function () {
+        console.log("Postfach2PDF: SelectedItemsChanged-Event ausgeloest");
+        refreshBatchSelection();
+      },
       function (result) {
         if (result.status !== Office.AsyncResultStatus.Succeeded) {
           console.warn("Postfach2PDF: SelectedItemsChanged-Handler konnte nicht registriert werden", result.error);
+        } else {
+          console.log("Postfach2PDF: SelectedItemsChanged-Handler erfolgreich registriert");
         }
       }
     );
@@ -582,6 +595,13 @@
 
       try {
         batchSelection = await getSelectedItemsAsync();
+        console.log(
+          "Postfach2PDF: getSelectedItemsAsync (Versuch " + (i + 1) + "/" + retryDelaysMs.length + ") ergab " +
+            batchSelection.length + " Element(e):",
+          batchSelection.map(function (m) {
+            return { itemType: m.itemType, itemMode: m.itemMode, subject: m.subject };
+          })
+        );
       } catch (error) {
         console.error("Postfach2PDF: Mehrfachauswahl konnte nicht gelesen werden", error);
         batchSelection = [];
