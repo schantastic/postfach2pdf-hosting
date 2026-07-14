@@ -634,6 +634,17 @@
         " fehlgeschlagen / " + rendered.imageStats.total + " gesamt" +
         (rendered.imageStats.firstError ? ". Erster Fehler: " + rendered.imageStats.firstError : ""),
     });
+    // Temporaer zur Fehlersuche: zeigt die letzten ~300 Zeichen des von
+    // Office.js erhaltenen Roh-HTML (als Text, Tags entfernt), damit man
+    // sieht ob der erwartete Fusszeilentext (z. B. "Unsubscribe") darin
+    // ueberhaupt vorkommt und wo - hilft zu unterscheiden, ob Office.js
+    // schon unvollstaendig liefert oder ob es erst beim Rendern verloren
+    // geht.
+    results.push({
+      name: "Diagnose: HTML-Ende (roh)",
+      status: "embedded",
+      detail: "..." + bodyHtml.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").slice(-300),
+    });
     var bodyPages = await targetPdf.copyPages(bodyPdf, bodyPdf.getPageIndices());
     bodyPages.forEach(function (p) {
       targetPdf.addPage(p);
