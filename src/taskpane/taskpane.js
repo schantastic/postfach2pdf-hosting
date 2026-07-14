@@ -383,13 +383,22 @@
     );
   }
 
+  // !important auf den Positionierungs-Eigenschaften unseres eigenen
+  // Headers (Betreff/Von/An/Datum): der rohe Mail-Body wird direkt danach
+  // ins selbe DOM eingefuegt, inklusive dessen eigener <style>-Bloecke.
+  // Viele Newsletter-Vorlagen nutzen unscoped Selektoren (z. B. einfach
+  // "h1 { margin-top: 40px !important; }"), die dann versehentlich auch
+  // unseren eigenen Betreff-<h1> treffen und ihn seitenmittig statt oben
+  // beginnen lassen. !important stellt sicher, dass unser eigener Header
+  // davon unbeeinflusst bleibt.
   var PDF_DOCUMENT_STYLE =
     "<style>" +
-    ".mp-pdf-document { font-family: Calibri, Arial, sans-serif; font-size: 12px; color: #000; }" +
-    ".mp-pdf-subject { font-size: 18px; margin: 0 0 10px 0; }" +
-    ".mp-pdf-header td { padding: 2px 8px 2px 0; vertical-align: top; }" +
+    ".mp-pdf-document { font-family: Calibri, Arial, sans-serif; font-size: 12px; color: #000; margin: 0 !important; padding: 0 !important; }" +
+    ".mp-pdf-subject { font-size: 18px !important; margin: 0 0 10px 0 !important; padding: 0 !important; }" +
+    ".mp-pdf-header { margin: 0 !important; }" +
+    ".mp-pdf-header td { padding: 2px 8px 2px 0 !important; vertical-align: top; margin: 0 !important; }" +
     ".mp-pdf-label { color: #555; white-space: nowrap; font-weight: 600; }" +
-    ".mp-pdf-divider { border: none; border-top: 1px solid #999; margin: 10px 0; }" +
+    ".mp-pdf-divider { border: none; border-top: 1px solid #999; margin: 10px 0 !important; padding: 0 !important; }" +
     ".mp-pdf-body img { max-width: 100%; height: auto; }" +
     ".mp-pdf-body table { max-width: 100%; }" +
     "</style>";
