@@ -369,6 +369,16 @@
       '<div class="mp-pdf-body">' +
       processedBody +
       "</div>" +
+      // Unsichtbarer Puffer ganz am Ende (unbestaetigte Mitigation):
+      // Nutzer meldet Content-Verlust am allerletzten Stueck grosser
+      // Mails, unabhaengig von der genauen Seitenaufteilung - deutet
+      // darauf hin, dass html2canvas den untersten Bereich der Leinwand
+      // nicht mehr fertig zeichnet (vermutlich Ressourcen-/Zeitdruck in
+      // der echten, schweren Outlook-Webseite). Dieser Puffer verschiebt
+      // den eigentlichen Inhalt (inkl. Fusszeile) weg vom gefaehrdeten
+      // aeussersten Rand - geht selbst nichts verloren, wenn er
+      // abgeschnitten wird.
+      '<div aria-hidden="true" style="height: 250px;"></div>' +
       "</div>"
     );
   }
