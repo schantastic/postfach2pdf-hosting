@@ -390,10 +390,16 @@
   async function renderEmailHtmlToPdfBytes(item, bodyHtml, options, attachmentsForHeader) {
     var documentHtml = buildDocumentHtml(item, bodyHtml, options, attachmentsForHeader);
     el.renderRoot.innerHTML = PDF_DOCUMENT_STYLE + documentHtml;
+    // Fusszeile/Seitenzahl (addPageNumbers) braucht ~30pt Platz am unteren
+    // Rand jeder Seite. Bei 15pt Rand ueberlappt der letzte Textabschnitt
+    // einer vollen Seite die Fusszeile (mit echten Chromium-Renderings
+    // reproduziert und verifiziert) - deshalb mehr Rand, wenn Seitenzahlen
+    // aktiv sind.
+    var bottomMargin = options.pageNumbers ? 45 : 15;
     try {
       return await html2pdf()
         .set({
-          margin: [15, 12, 15, 12],
+          margin: [15, 12, bottomMargin, 12],
           // windowWidth/width/x/y explizit setzen: ohne diese Angaben
           // berechnet diese html2canvas-Version einen falschen
           // horizontalen Ausschnitt (fester Versatz von ca. 259px,
@@ -421,8 +427,10 @@
 
   // Rendert eine einzelne E-Mail (Body + alle Anhaenge) als Seiten in das
   // uebergebene PDFDocument. Wird sowohl vom Einzel- als auch vom
-  // Batch-Modus genutzt.
-  async function renderEmailPagesInto(item, options, attachments, targetPdf, results, onProgress) {
+  // Batch-Modus genutzt. skipPageIndices sammelt die 0-basierten Indizes
+  // seitengetreu kopierter PDF-Anhangsseiten (kein reservierter Rand) -
+  // addPageNumbers() darf darauf nichts zeichnen, siehe dort.
+  async function renderEmailPagesInto(item, options, attachments, targetPdf, results, skipPageIndices, onProgress) {
     var bodyHtml = await getBodyHtml(item);
     var bodyPdfArrayBuffer = await renderEmailHtmlToPdfBytes(item, bodyHtml, options, attachments);
 
@@ -437,7 +445,14 @@
       if (onProgress) {
         onProgress(attachment, i, attachments.length);
       }
+      var pageCountBefore = targetPdf.getPageCount();
       var outcome = await Postfach2PdfCore.embedAttachmentIntoPdf(item, targetPdf, attachment);
+      if (outcome.rawCopy) {
+        var pageCountAfter = targetPdf.getPageCount();
+        for (var p = pageCountBefore; p < pageCountAfter; p++) {
+          skipPageIndices.push(p);
+        }
+      }
       results.push({ name: attachment.name, status: outcome.status, reason: outcome.reason });
     }
   }
@@ -446,6 +461,7 @@
     var selectedAttachments = getSelectedAttachments();
     var deselectedAttachments = getDeselectedAttachments();
     var results = [];
+    var skipPageIndices = [];
 
     var mergedPdf = await PDFLib.PDFDocument.create();
     mergedPdf.setProducer("Postfach2PDF (schantastic)");
@@ -453,7 +469,7 @@
     mergedPdf.setTitle(item.subject || "E-Mail");
     mergedPdf.setCreationDate(new Date());
 
-    await renderEmailPagesInto(item, options, selectedAttachments, mergedPdf, results, function (attachment, i, total) {
+    await renderEmailPagesInto(item, options, selectedAttachments, mergedPdf, results, skipPageIndices, function (attachment, i, total) {
       setStatus("Verarbeite Anhang " + (i + 1) + "/" + total + ": " + attachment.name + " ...");
     });
 
@@ -463,7 +479,7 @@
 
     if (options.pageNumbers) {
       setStatus("Fuege Seitenzahlen hinzu ...");
-      await Postfach2PdfCore.addPageNumbers(mergedPdf);
+      await Postfach2PdfCore.addPageNumbers(mergedPdf, skipPageIndices);
     }
 
     setStatus("Erzeuge PDF-Bytes ...");
@@ -693,6 +709,7 @@
     mergedPdf.setCreator("Postfach2PDF");
     mergedPdf.setCreationDate(new Date());
     var overallResults = [];
+    var skipPageIndices = [];
 
     for (var i = 0; i < messages.length; i++) {
       setStatus("Lade E-Mail " + (i + 1) + "/" + messages.length + ": " + (messages[i].subject || "") + " ...");
@@ -700,7 +717,7 @@
       try {
         var attachments = nonInlineAttachments(item);
         var itemResults = [];
-        await renderEmailPagesInto(item, options, attachments, mergedPdf, itemResults, function (attachment, j, total) {
+        await renderEmailPagesInto(item, options, attachments, mergedPdf, itemResults, skipPageIndices, function (attachment, j, total) {
           setStatus(
             "E-Mail " + (i + 1) + "/" + messages.length + " – Anhang " + (j + 1) + "/" + total + ": " + attachment.name + " ..."
           );
@@ -717,7 +734,7 @@
 
     if (options.pageNumbers) {
       setStatus("Fuege Seitenzahlen hinzu ...");
-      await Postfach2PdfCore.addPageNumbers(mergedPdf);
+      await Postfach2PdfCore.addPageNumbers(mergedPdf, skipPageIndices);
     }
 
     var bytes = await mergedPdf.save();
@@ -741,15 +758,16 @@
         singleDoc.setCreator("Postfach2PDF");
         singleDoc.setTitle(item.subject || "E-Mail");
         singleDoc.setCreationDate(new Date());
+        var skipPageIndices = [];
 
-        await renderEmailPagesInto(item, options, attachments, singleDoc, itemResults, function (attachment, j, total) {
+        await renderEmailPagesInto(item, options, attachments, singleDoc, itemResults, skipPageIndices, function (attachment, j, total) {
           setStatus(
             "E-Mail " + (i + 1) + "/" + messages.length + " – Anhang " + (j + 1) + "/" + total + ": " + attachment.name + " ..."
           );
         });
 
         if (options.pageNumbers) {
-          await Postfach2PdfCore.addPageNumbers(singleDoc);
+          await Postfach2PdfCore.addPageNumbers(singleDoc, skipPageIndices);
         }
 
         var bytes = await singleDoc.save();

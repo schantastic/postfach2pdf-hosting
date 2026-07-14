@@ -223,7 +223,11 @@
       copiedPages.forEach(function (p) {
         mergedPdf.addPage(p);
       });
-      return { status: "embedded" };
+      // rawCopy: true - diese Seiten sind 1:1 aus dem Original-Anhang
+      // kopiert (seitengetreu) und haben keinerlei reservierten Rand.
+      // addPageNumbers() darf hier nichts drueberzeichnen, sonst
+      // ueberlagert die Fusszeile echten Anhangsinhalt.
+      return { status: "embedded", rawCopy: true };
     } catch (error) {
       var reason =
         "PDF-Anhang konnte nicht eingebettet werden (evtl. verschluesselt oder beschaedigt): " +
@@ -324,13 +328,22 @@
     }
   }
 
-  async function addPageNumbers(mergedPdf) {
+  // skipPageIndices: 0-basierte Seitenindizes, die NICHT beschriftet
+  // werden sollen (seitengetreu kopierte PDF-Anhangsseiten ohne
+  // reservierten Rand - eine Fusszeile wuerde dort echten Inhalt
+  // ueberlagern). Zaehlung ("Seite X von Y") bleibt trotzdem korrekt,
+  // uebersprungene Seiten werden nur nicht bezeichnet.
+  async function addPageNumbers(mergedPdf, skipPageIndices) {
+    var skipSet = skipPageIndices || [];
     var font = await mergedPdf.embedFont(PDFLib.StandardFonts.Helvetica);
     var pages = mergedPdf.getPages();
     var total = pages.length;
     var margin = 36;
 
     pages.forEach(function (page, index) {
+      if (skipSet.indexOf(index) !== -1) {
+        return;
+      }
       var width = page.getWidth();
       var text = "Seite " + (index + 1) + " von " + total;
       var size = 8;
