@@ -396,8 +396,14 @@
     // reproduziert und verifiziert) - deshalb mehr Rand, wenn Seitenzahlen
     // aktiv sind.
     var bottomMargin = options.pageNumbers ? 45 : 15;
+    // Temporaer zur Fehlersuche (Content-Verlust bei grossen HTML-Mails):
+    // Hoehe des fertig aufgebauten Inhalts VOR dem html2canvas-Erfassen
+    // messen, um zu sehen ob das DOM selbst schon zu kurz ist (Problem im
+    // Mail-HTML/CSS) oder ob html2canvas/html2pdf beim Erfassen etwas
+    // verliert (Problem in der Rendering-Pipeline).
+    var renderRootScrollHeight = el.renderRoot.scrollHeight;
     try {
-      return await html2pdf()
+      var arrayBuffer = await html2pdf()
         .set({
           margin: [15, 12, bottomMargin, 12],
           // windowWidth/width/x/y explizit setzen: ohne diese Angaben
@@ -420,6 +426,7 @@
         .from(el.renderRoot)
         .toPdf()
         .outputPdf("arraybuffer");
+      return { arrayBuffer: arrayBuffer, renderRootScrollHeight: renderRootScrollHeight };
     } finally {
       el.renderRoot.innerHTML = "";
     }
@@ -432,17 +439,22 @@
   // addPageNumbers() darf darauf nichts zeichnen, siehe dort.
   async function renderEmailPagesInto(item, options, attachments, targetPdf, results, skipPageIndices, onProgress) {
     var bodyHtml = await getBodyHtml(item);
-    var bodyPdfArrayBuffer = await renderEmailHtmlToPdfBytes(item, bodyHtml, options, attachments);
+    var rendered = await renderEmailHtmlToPdfBytes(item, bodyHtml, options, attachments);
 
-    var bodyPdf = await PDFLib.PDFDocument.load(bodyPdfArrayBuffer);
-    // Temporaer zur Fehlersuche (Verdacht: Office.js liefert bei sehr
-    // grossen HTML-Mails nur einen Teil des Bodys zurueck, bevor unser
-    // Rendering ueberhaupt beginnt). Erscheint in der Ergebnisliste, damit
-    // man ohne DevTools sieht, wie viele Zeichen tatsaechlich ankamen.
+    var bodyPdf = await PDFLib.PDFDocument.load(rendered.arrayBuffer);
+    // Temporaer zur Fehlersuche (Content-Verlust bei grossen HTML-Mails).
+    // Erscheint in der Ergebnisliste, damit man ohne DevTools sieht: wie
+    // viele Zeichen kamen von Office.js an, wie hoch (px) war der fertig
+    // aufgebaute Inhalt VOR html2canvas, und wie viele Seiten kamen dabei
+    // raus. Grosse Hoehe + wenige Seiten = Rendering verliert Inhalt.
+    // Kleine Hoehe trotz vieler Zeichen = Problem liegt im Mail-HTML/CSS
+    // selbst (z. B. overflow:hidden in zusammengeklapptem Zitat-Verlauf).
     results.push({
       name: "Diagnose: Body-Laenge",
       status: "embedded",
-      detail: bodyHtml.length + " Zeichen HTML von Office.js erhalten, " + bodyPdf.getPageCount() + " Body-Seite(n) gerendert",
+      detail:
+        bodyHtml.length + " Zeichen HTML, Render-Hoehe " + rendered.renderRootScrollHeight +
+        "px, " + bodyPdf.getPageCount() + " Body-Seite(n) gerendert",
     });
     var bodyPages = await targetPdf.copyPages(bodyPdf, bodyPdf.getPageIndices());
     bodyPages.forEach(function (p) {
