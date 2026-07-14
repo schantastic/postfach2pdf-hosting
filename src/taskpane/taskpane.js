@@ -387,9 +387,97 @@
   // Muss mit der Breite von .mp-render-root in taskpane.css uebereinstimmen.
   var RENDER_ROOT_WIDTH = 800;
 
+  // Laedt externe (http/https) Bilder selbst herunter und ersetzt src durch
+  // eine data:-URI, BEVOR html2canvas ueberhaupt anfaengt. Grund: mit
+  // Playwright/Chromium reproduziert - html2canvas klont das DOM fuer die
+  // eigentliche Erfassung intern nochmal, und dieser Klon wartet nicht
+  // zuverlaessig auf noch ladende Netzwerkbilder. Ergebnis war ein Bild mit
+  // ~90px statt der echten Hoehe und kompletter Verlust allen Inhalts
+  // danach - selbst wenn das Original-<img> im sichtbaren DOM laengst fertig
+  // geladen war. Data-URIs sind synchron/sofort verfuegbar und umgehen das
+  // Problem komplett. Schlaegt der Download fehl (z. B. CORS), bleibt das
+  // Bild als normaler Live-Link stehen (gleiches Verhalten wie vorher).
+  async function inlineExternalImages(container) {
+    var imgs = Array.prototype.slice.call(container.querySelectorAll("img"));
+    var stats = { total: 0, inlined: 0, failed: 0 };
+
+    await Promise.all(
+      imgs.map(function (img) {
+        var src = img.getAttribute("src") || "";
+        if (!/^https?:/i.test(src)) {
+          return Promise.resolve();
+        }
+        stats.total++;
+        return fetch(src)
+          .then(function (response) {
+            if (!response.ok) {
+              throw new Error("HTTP " + response.status);
+            }
+            return response.blob();
+          })
+          .then(function (blob) {
+            return new Promise(function (resolve, reject) {
+              var reader = new FileReader();
+              reader.onload = function () {
+                resolve(reader.result);
+              };
+              reader.onerror = function () {
+                reject(reader.error);
+              };
+              reader.readAsDataURL(blob);
+            });
+          })
+          .then(function (dataUrl) {
+            img.src = dataUrl;
+            stats.inlined++;
+          })
+          .catch(function (error) {
+            stats.failed++;
+            console.warn(
+              "Postfach2PDF: externes Bild konnte nicht vorab eingebettet werden, bleibt als Live-Link",
+              src,
+              error
+            );
+          });
+      })
+    );
+
+    return stats;
+  }
+
+  // Wartet, bis alle <img>-Elemente im Container fertig geladen (oder
+  // endgueltig fehlgeschlagen) sind. Faengt vor allem Bilder ab, die trotz
+  // inlineExternalImages() noch als Live-Link uebrig sind (z. B. wegen
+  // CORS). Pro Bild maximal 8s warten, damit ein einzelnes haengendes Bild
+  // die PDF-Erzeugung nicht blockiert.
+  function waitForImages(container) {
+    var imgs = container.querySelectorAll("img");
+    var promises = [];
+    imgs.forEach(function (img) {
+      if (img.complete) {
+        return;
+      }
+      promises.push(
+        new Promise(function (resolve) {
+          var done = function () {
+            img.removeEventListener("load", done);
+            img.removeEventListener("error", done);
+            resolve();
+          };
+          img.addEventListener("load", done);
+          img.addEventListener("error", done);
+          setTimeout(done, 8000);
+        })
+      );
+    });
+    return Promise.all(promises);
+  }
+
   async function renderEmailHtmlToPdfBytes(item, bodyHtml, options, attachmentsForHeader) {
     var documentHtml = buildDocumentHtml(item, bodyHtml, options, attachmentsForHeader);
     el.renderRoot.innerHTML = PDF_DOCUMENT_STYLE + documentHtml;
+    var imageStats = await inlineExternalImages(el.renderRoot);
+    await waitForImages(el.renderRoot);
     // Fusszeile/Seitenzahl (addPageNumbers) braucht ~30pt Platz am unteren
     // Rand jeder Seite. Bei 15pt Rand ueberlappt der letzte Textabschnitt
     // einer vollen Seite die Fusszeile (mit echten Chromium-Renderings
@@ -426,7 +514,7 @@
         .from(el.renderRoot)
         .toPdf()
         .outputPdf("arraybuffer");
-      return { arrayBuffer: arrayBuffer, renderRootScrollHeight: renderRootScrollHeight };
+      return { arrayBuffer: arrayBuffer, renderRootScrollHeight: renderRootScrollHeight, imageStats: imageStats };
     } finally {
       el.renderRoot.innerHTML = "";
     }
@@ -454,7 +542,9 @@
       status: "embedded",
       detail:
         bodyHtml.length + " Zeichen HTML, Render-Hoehe " + rendered.renderRootScrollHeight +
-        "px, " + bodyPdf.getPageCount() + " Body-Seite(n) gerendert",
+        "px, " + bodyPdf.getPageCount() + " Body-Seite(n) gerendert, Bilder: " +
+        rendered.imageStats.inlined + " eingebettet / " + rendered.imageStats.failed +
+        " fehlgeschlagen / " + rendered.imageStats.total + " gesamt",
     });
     var bodyPages = await targetPdf.copyPages(bodyPdf, bodyPdf.getPageIndices());
     bodyPages.forEach(function (p) {
