@@ -413,9 +413,8 @@
     var inlineAttachments = (item.attachments || []).filter(function (a) {
       return a.isInline;
     });
-    var stats = { total: inlineAttachments.length, embedded: 0, failed: 0 };
     if (inlineAttachments.length === 0) {
-      return stats;
+      return;
     }
 
     var imgs = Array.prototype.slice.call(container.querySelectorAll("img"));
@@ -428,29 +427,19 @@
             throw new Error("unerwartetes Format " + content.format);
           }
           var dataUrl = "data:" + (attachment.contentType || "image/png") + ";base64," + content.content;
-          var matched = false;
           imgs.forEach(function (img) {
             var src = img.getAttribute("src") || "";
             var matchesCid = attachment.contentId && src === "cid:" + attachment.contentId;
             var matchesId = src.indexOf(attachment.id) !== -1;
             if (matchesCid || matchesId) {
               img.src = dataUrl;
-              matched = true;
             }
           });
-          if (matched) {
-            stats.embedded++;
-          } else {
-            stats.failed++;
-          }
         } catch (error) {
-          stats.failed++;
           console.warn("Postfach2PDF: Inline-Bild konnte nicht eingebettet werden", attachment.name, error);
         }
       })
     );
-
-    return stats;
   }
 
   // Laedt externe (http/https) Bilder selbst herunter und ersetzt src durch
@@ -467,7 +456,6 @@
   // Bild als normaler Live-Link stehen (gleiches Verhalten wie vorher).
   async function inlineExternalImages(container) {
     var imgs = Array.prototype.slice.call(container.querySelectorAll("img"));
-    var stats = { total: 0, inlined: 0, failed: 0, firstError: null };
 
     await Promise.all(
       imgs.map(function (img) {
@@ -475,7 +463,6 @@
         if (!/^https?:/i.test(src)) {
           return Promise.resolve();
         }
-        stats.total++;
         return fetch(src)
           .then(function (response) {
             if (!response.ok) {
@@ -497,24 +484,8 @@
           })
           .then(function (dataUrl) {
             img.src = dataUrl;
-            stats.inlined++;
           })
           .catch(function (error) {
-            stats.failed++;
-            // Nur den Hostnamen merken (nicht die volle URL mit evtl.
-            // Tracking-Tokens) + die Fehlermeldung, damit man ohne
-            // DevTools sieht, WARUM der Download scheitert (CORS? HTTP-
-            // Status? Netzwerkfehler? Browser-eigener Tracker-/Werbeblocker
-            // wie Brave Shields?), ohne sensible URL-Teile preiszugeben.
-            if (!stats.firstError) {
-              var hostname = src;
-              try {
-                hostname = new URL(src).hostname;
-              } catch (e) {
-                // src war keine gueltige absolute URL - Rohwert behalten
-              }
-              stats.firstError = hostname + ": " + (error && error.message ? error.message : String(error));
-            }
             // Bild NICHT als lebendigen Netzwerk-Link stehen lassen: genau
             // das fuehrt dazu, dass html2canvas beim internen DOM-Klonen
             // haengen bleibt und ALLEN Inhalt danach verliert (reproduziert
@@ -530,8 +501,6 @@
           });
       })
     );
-
-    return stats;
   }
 
   // Wartet, bis alle <img>-Elemente im Container fertig geladen (oder
@@ -565,18 +534,14 @@
   async function renderEmailHtmlToPdfBytes(item, bodyHtml, options, attachmentsForHeader) {
     var documentHtml = buildDocumentHtml(item, bodyHtml, options, attachmentsForHeader);
     el.renderRoot.innerHTML = PDF_DOCUMENT_STYLE + documentHtml;
-    var inlineImageStats = await embedInlineAttachmentImages(item, el.renderRoot);
-    var imageStats = await inlineExternalImages(el.renderRoot);
+    await embedInlineAttachmentImages(item, el.renderRoot);
+    await inlineExternalImages(el.renderRoot);
     await waitForImages(el.renderRoot);
-    // Kurze Pause, bevor html2canvas zu erfassen beginnt: Nutzer meldete
-    // fehlenden Inhalt ganz am Ende grosser Mails, der sich trotz
-    // identischem HTML/Bilder-Zustand lokal nicht reproduzieren liess -
-    // vermutlich ein Timing-/Ressourcenproblem, das nur in der echten,
-    // sehr schweren Outlook-Webseite auftritt (viel eigenes JavaScript
-    // parallel zu unserer Taskpane). Alle bisher in diesem Projekt
-    // gefundenen Rendering-Bugs waren Timing-bedingt - diese Pause gibt
-    // Layout/GC zusaetzliche Zeit, sich vor der aufwendigen Erfassung
-    // zu setzen.
+    // Kurze Pause, bevor html2canvas zu erfassen beginnt: bei grossen
+    // Mails ging vereinzelt Inhalt ganz am Ende verloren, vermutlich durch
+    // Zeit-/Ressourcendruck in der (im Vergleich zu unserer Taskpane viel
+    // schwereren) echten Outlook-Webseite. Gibt Layout/GC etwas Luft, sich
+    // vor der aufwendigen Erfassung zu setzen.
     await new Promise(function (resolve) {
       setTimeout(resolve, 300);
     });
@@ -586,65 +551,34 @@
     // reproduziert und verifiziert) - deshalb mehr Rand, wenn Seitenzahlen
     // aktiv sind.
     var bottomMargin = options.pageNumbers ? 45 : 15;
-    // Temporaer zur Fehlersuche (Content-Verlust bei grossen HTML-Mails):
-    // Hoehe des fertig aufgebauten Inhalts VOR dem html2canvas-Erfassen
-    // messen, um zu sehen ob das DOM selbst schon zu kurz ist (Problem im
-    // Mail-HTML/CSS) oder ob html2canvas/html2pdf beim Erfassen etwas
-    // verliert (Problem in der Rendering-Pipeline).
-    var renderRootScrollHeight = el.renderRoot.scrollHeight;
     try {
-      var worker = html2pdf().set({
-        margin: [15, 12, bottomMargin, 12],
-        // windowWidth/width/x/y explizit setzen: ohne diese Angaben
-        // berechnet diese html2canvas-Version einen falschen
-        // horizontalen Ausschnitt (fester Versatz von ca. 259px,
-        // unabhaengig vom Inhalt) und schneidet den linken Rand +
-        // Teile des Textes ab. Lokal mit Playwright/Chromium gegen
-        // die vendorte Bibliothek reproduziert und verifiziert.
-        html2canvas: {
-          // Von 2 auf 1.5 reduziert (unbestaetigter Versuch): Nutzer
-          // verliert bei einer grossen Mail Inhalt ganz am Ende, obwohl
-          // html2canvas selbst nachweislich die volle, korrekte Hoehe
-          // erfasst (per Diagnose bestaetigt: 9732px Canvas entspricht
-          // exakt der gemessenen DOM-Hoehe) - der Verlust passiert also
-          // erst beim Zerschneiden in PDF-Seiten oder beim Zusammenbau
-          // danach, moeglicherweise wegen einer sehr grossen Canvas-Flaeche
-          // unter Speicherdruck in der (im Vergleich zu unserer isolierten
-          // Testumgebung viel schwereren) echten Outlook-Webseite. Ein
-          // kleinerer Scale-Faktor reduziert die Canvas-Groesse spuerbar
-          // (~44% weniger Pixel), auf Kosten etwas geringerer Bildschaerfe.
-          scale: 1.5,
-          useCORS: false,
-          windowWidth: RENDER_ROOT_WIDTH,
-          width: RENDER_ROOT_WIDTH,
-          x: 0,
-          y: 0,
-        },
-        jsPDF: { unit: "pt", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["css", "legacy"] },
-      }).from(el.renderRoot);
-
-      // Temporaer zur Fehlersuche: die tatsaechlich von html2canvas erzeugte
-      // Canvas-Groesse ueber die eigene Zwischenschritt-API abfragen (ein
-      // Versuch, das ueber console.log abzufangen, scheiterte - die
-      // Bibliothek nutzt intern eine bereits gebundene Referenz, die sich
-      // nicht umleiten laesst). So sehen wir, ob html2canvas selbst schon
-      // eine zu kleine Hoehe berechnet oder ob der Verlust erst danach
-      // (jsPDF-Seitenaufteilung/unser Zusammenfuegen) passiert.
-      var intermediateCanvas = await worker.toCanvas().get("canvas");
-      var actualCanvasSize = {
-        width: intermediateCanvas ? intermediateCanvas.width : null,
-        height: intermediateCanvas ? intermediateCanvas.height : null,
-      };
-
-      var arrayBuffer = await worker.toPdf().outputPdf("arraybuffer");
-      return {
-        arrayBuffer: arrayBuffer,
-        renderRootScrollHeight: renderRootScrollHeight,
-        imageStats: imageStats,
-        inlineImageStats: inlineImageStats,
-        actualCanvasSize: actualCanvasSize,
-      };
+      var arrayBuffer = await html2pdf()
+        .set({
+          margin: [15, 12, bottomMargin, 12],
+          // windowWidth/width/x/y explizit setzen: ohne diese Angaben
+          // berechnet diese html2canvas-Version einen falschen
+          // horizontalen Ausschnitt (fester Versatz von ca. 259px,
+          // unabhaengig vom Inhalt) und schneidet den linken Rand +
+          // Teile des Textes ab. Lokal mit Playwright/Chromium gegen
+          // die vendorte Bibliothek reproduziert und verifiziert.
+          html2canvas: {
+            // Reduziert Speicherbedarf der Erfassungsflaeche bei grossen
+            // Mails (siehe Pause oben) - auf Kosten leicht geringerer
+            // Bildschaerfe.
+            scale: 1.5,
+            useCORS: false,
+            windowWidth: RENDER_ROOT_WIDTH,
+            width: RENDER_ROOT_WIDTH,
+            x: 0,
+            y: 0,
+          },
+          jsPDF: { unit: "pt", format: "a4", orientation: "portrait" },
+          pagebreak: { mode: ["css", "legacy"] },
+        })
+        .from(el.renderRoot)
+        .toPdf()
+        .outputPdf("arraybuffer");
+      return arrayBuffer;
     } finally {
       el.renderRoot.innerHTML = "";
     }
@@ -655,51 +589,11 @@
   // Batch-Modus genutzt. skipPageIndices sammelt die 0-basierten Indizes
   // seitengetreu kopierter PDF-Anhangsseiten (kein reservierter Rand) -
   // addPageNumbers() darf darauf nichts zeichnen, siehe dort.
-  // Temporaer zur Fehlersuche: haelt das zuletzt von Office.js erhaltene
-  // Roh-HTML fest, damit onGenerateClicked es zusaetzlich als .txt zum
-  // Download anbieten kann (der rohe .eml-Quelltext unterscheidet sich
-  // von dem, was Office.js tatsaechlich liefert - Outlook schreibt u. a.
-  // Bild-URLs um - deshalb reicht ein lokaler .eml-Test nicht).
-  var lastBodyHtmlForDebug = null;
-
   async function renderEmailPagesInto(item, options, attachments, targetPdf, results, skipPageIndices, onProgress) {
     var bodyHtml = await getBodyHtml(item);
-    lastBodyHtmlForDebug = bodyHtml;
-    var rendered = await renderEmailHtmlToPdfBytes(item, bodyHtml, options, attachments);
+    var bodyPdfArrayBuffer = await renderEmailHtmlToPdfBytes(item, bodyHtml, options, attachments);
 
-    var bodyPdf = await PDFLib.PDFDocument.load(rendered.arrayBuffer);
-    // Temporaer zur Fehlersuche (Content-Verlust bei grossen HTML-Mails).
-    // Erscheint in der Ergebnisliste, damit man ohne DevTools sieht: wie
-    // viele Zeichen kamen von Office.js an, wie hoch (px) war der fertig
-    // aufgebaute Inhalt VOR html2canvas, und wie viele Seiten kamen dabei
-    // raus. Grosse Hoehe + wenige Seiten = Rendering verliert Inhalt.
-    // Kleine Hoehe trotz vieler Zeichen = Problem liegt im Mail-HTML/CSS
-    // selbst (z. B. overflow:hidden in zusammengeklapptem Zitat-Verlauf).
-    results.push({
-      name: "Diagnose: Body-Laenge",
-      status: "embedded",
-      detail:
-        bodyHtml.length + " Zeichen HTML, Render-Hoehe " + rendered.renderRootScrollHeight +
-        "px, " + bodyPdf.getPageCount() + " Body-Seite(n) gerendert. Inline-Anhangsbilder: " +
-        rendered.inlineImageStats.embedded + " eingebettet / " + rendered.inlineImageStats.failed +
-        " fehlgeschlagen / " + rendered.inlineImageStats.total + " gesamt. Externe Bild-Downloads: " +
-        rendered.imageStats.inlined + " eingebettet / " + rendered.imageStats.failed +
-        " fehlgeschlagen / " + rendered.imageStats.total + " gesamt" +
-        (rendered.imageStats.firstError ? ". Erster Fehler: " + rendered.imageStats.firstError : "") +
-        ". Tatsaechliche html2canvas-Groesse: " +
-        (rendered.actualCanvasSize.width || "?") + "x" + (rendered.actualCanvasSize.height || "?") + "px",
-    });
-    // Temporaer zur Fehlersuche: zeigt die letzten ~300 Zeichen des von
-    // Office.js erhaltenen Roh-HTML (als Text, Tags entfernt), damit man
-    // sieht ob der erwartete Fusszeilentext (z. B. "Unsubscribe") darin
-    // ueberhaupt vorkommt und wo - hilft zu unterscheiden, ob Office.js
-    // schon unvollstaendig liefert oder ob es erst beim Rendern verloren
-    // geht.
-    results.push({
-      name: "Diagnose: HTML-Ende (roh)",
-      status: "embedded",
-      detail: "..." + bodyHtml.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").slice(-300),
-    });
+    var bodyPdf = await PDFLib.PDFDocument.load(bodyPdfArrayBuffer);
     var bodyPages = await targetPdf.copyPages(bodyPdf, bodyPdf.getPageIndices());
     bodyPages.forEach(function (p) {
       targetPdf.addPage(p);
@@ -773,12 +667,6 @@
       var built = await buildFinalPdf(item, currentOptions());
       setStatus("Speichere PDF ...");
       Postfach2PdfCore.downloadBytes(built.bytes, built.fileName);
-      // Temporaer zur Fehlersuche: rohes Body-HTML zusaetzlich als .txt
-      // anbieten (siehe lastBodyHtmlForDebug oben).
-      if (lastBodyHtmlForDebug) {
-        var debugBytes = new TextEncoder().encode(lastBodyHtmlForDebug);
-        Postfach2PdfCore.downloadBytes(debugBytes, "postfach2pdf-debug-body.txt");
-      }
       renderResults(built.results);
       setStatus("PDF wurde erzeugt und zum Download angeboten.", "success");
     } catch (error) {
