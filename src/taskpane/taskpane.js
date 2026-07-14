@@ -435,6 +435,15 @@
     var bodyPdfArrayBuffer = await renderEmailHtmlToPdfBytes(item, bodyHtml, options, attachments);
 
     var bodyPdf = await PDFLib.PDFDocument.load(bodyPdfArrayBuffer);
+    // Temporaer zur Fehlersuche (Verdacht: Office.js liefert bei sehr
+    // grossen HTML-Mails nur einen Teil des Bodys zurueck, bevor unser
+    // Rendering ueberhaupt beginnt). Erscheint in der Ergebnisliste, damit
+    // man ohne DevTools sieht, wie viele Zeichen tatsaechlich ankamen.
+    results.push({
+      name: "Diagnose: Body-Laenge",
+      status: "embedded",
+      detail: bodyHtml.length + " Zeichen HTML von Office.js erhalten, " + bodyPdf.getPageCount() + " Body-Seite(n) gerendert",
+    });
     var bodyPages = await targetPdf.copyPages(bodyPdf, bodyPdf.getPageIndices());
     bodyPages.forEach(function (p) {
       targetPdf.addPage(p);
