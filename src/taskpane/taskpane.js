@@ -583,34 +583,46 @@
     // verliert (Problem in der Rendering-Pipeline).
     var renderRootScrollHeight = el.renderRoot.scrollHeight;
     try {
-      var arrayBuffer = await html2pdf()
-        .set({
-          margin: [15, 12, bottomMargin, 12],
-          // windowWidth/width/x/y explizit setzen: ohne diese Angaben
-          // berechnet diese html2canvas-Version einen falschen
-          // horizontalen Ausschnitt (fester Versatz von ca. 259px,
-          // unabhaengig vom Inhalt) und schneidet den linken Rand +
-          // Teile des Textes ab. Lokal mit Playwright/Chromium gegen
-          // die vendorte Bibliothek reproduziert und verifiziert.
-          html2canvas: {
-            scale: 2,
-            useCORS: false,
-            windowWidth: RENDER_ROOT_WIDTH,
-            width: RENDER_ROOT_WIDTH,
-            x: 0,
-            y: 0,
-          },
-          jsPDF: { unit: "pt", format: "a4", orientation: "portrait" },
-          pagebreak: { mode: ["css", "legacy"] },
-        })
-        .from(el.renderRoot)
-        .toPdf()
-        .outputPdf("arraybuffer");
+      var worker = html2pdf().set({
+        margin: [15, 12, bottomMargin, 12],
+        // windowWidth/width/x/y explizit setzen: ohne diese Angaben
+        // berechnet diese html2canvas-Version einen falschen
+        // horizontalen Ausschnitt (fester Versatz von ca. 259px,
+        // unabhaengig vom Inhalt) und schneidet den linken Rand +
+        // Teile des Textes ab. Lokal mit Playwright/Chromium gegen
+        // die vendorte Bibliothek reproduziert und verifiziert.
+        html2canvas: {
+          scale: 2,
+          useCORS: false,
+          windowWidth: RENDER_ROOT_WIDTH,
+          width: RENDER_ROOT_WIDTH,
+          x: 0,
+          y: 0,
+        },
+        jsPDF: { unit: "pt", format: "a4", orientation: "portrait" },
+        pagebreak: { mode: ["css", "legacy"] },
+      }).from(el.renderRoot);
+
+      // Temporaer zur Fehlersuche: die tatsaechlich von html2canvas erzeugte
+      // Canvas-Groesse ueber die eigene Zwischenschritt-API abfragen (ein
+      // Versuch, das ueber console.log abzufangen, scheiterte - die
+      // Bibliothek nutzt intern eine bereits gebundene Referenz, die sich
+      // nicht umleiten laesst). So sehen wir, ob html2canvas selbst schon
+      // eine zu kleine Hoehe berechnet oder ob der Verlust erst danach
+      // (jsPDF-Seitenaufteilung/unser Zusammenfuegen) passiert.
+      var intermediateCanvas = await worker.toCanvas().get("canvas");
+      var actualCanvasSize = {
+        width: intermediateCanvas ? intermediateCanvas.width : null,
+        height: intermediateCanvas ? intermediateCanvas.height : null,
+      };
+
+      var arrayBuffer = await worker.toPdf().outputPdf("arraybuffer");
       return {
         arrayBuffer: arrayBuffer,
         renderRootScrollHeight: renderRootScrollHeight,
         imageStats: imageStats,
         inlineImageStats: inlineImageStats,
+        actualCanvasSize: actualCanvasSize,
       };
     } finally {
       el.renderRoot.innerHTML = "";
@@ -652,7 +664,9 @@
         " fehlgeschlagen / " + rendered.inlineImageStats.total + " gesamt. Externe Bild-Downloads: " +
         rendered.imageStats.inlined + " eingebettet / " + rendered.imageStats.failed +
         " fehlgeschlagen / " + rendered.imageStats.total + " gesamt" +
-        (rendered.imageStats.firstError ? ". Erster Fehler: " + rendered.imageStats.firstError : ""),
+        (rendered.imageStats.firstError ? ". Erster Fehler: " + rendered.imageStats.firstError : "") +
+        ". Tatsaechliche html2canvas-Groesse: " +
+        (rendered.actualCanvasSize.width || "?") + "x" + (rendered.actualCanvasSize.height || "?") + "px",
     });
     // Temporaer zur Fehlersuche: zeigt die letzten ~300 Zeichen des von
     // Office.js erhaltenen Roh-HTML (als Text, Tags entfernt), damit man
