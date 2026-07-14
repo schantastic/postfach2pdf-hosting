@@ -592,7 +592,18 @@
         // Teile des Textes ab. Lokal mit Playwright/Chromium gegen
         // die vendorte Bibliothek reproduziert und verifiziert.
         html2canvas: {
-          scale: 2,
+          // Von 2 auf 1.5 reduziert (unbestaetigter Versuch): Nutzer
+          // verliert bei einer grossen Mail Inhalt ganz am Ende, obwohl
+          // html2canvas selbst nachweislich die volle, korrekte Hoehe
+          // erfasst (per Diagnose bestaetigt: 9732px Canvas entspricht
+          // exakt der gemessenen DOM-Hoehe) - der Verlust passiert also
+          // erst beim Zerschneiden in PDF-Seiten oder beim Zusammenbau
+          // danach, moeglicherweise wegen einer sehr grossen Canvas-Flaeche
+          // unter Speicherdruck in der (im Vergleich zu unserer isolierten
+          // Testumgebung viel schwereren) echten Outlook-Webseite. Ein
+          // kleinerer Scale-Faktor reduziert die Canvas-Groesse spuerbar
+          // (~44% weniger Pixel), auf Kosten etwas geringerer Bildschaerfe.
+          scale: 1.5,
           useCORS: false,
           windowWidth: RENDER_ROOT_WIDTH,
           width: RENDER_ROOT_WIDTH,
