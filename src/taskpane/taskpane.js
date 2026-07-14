@@ -610,8 +610,16 @@
   // Batch-Modus genutzt. skipPageIndices sammelt die 0-basierten Indizes
   // seitengetreu kopierter PDF-Anhangsseiten (kein reservierter Rand) -
   // addPageNumbers() darf darauf nichts zeichnen, siehe dort.
+  // Temporaer zur Fehlersuche: haelt das zuletzt von Office.js erhaltene
+  // Roh-HTML fest, damit onGenerateClicked es zusaetzlich als .txt zum
+  // Download anbieten kann (der rohe .eml-Quelltext unterscheidet sich
+  // von dem, was Office.js tatsaechlich liefert - Outlook schreibt u. a.
+  // Bild-URLs um - deshalb reicht ein lokaler .eml-Test nicht).
+  var lastBodyHtmlForDebug = null;
+
   async function renderEmailPagesInto(item, options, attachments, targetPdf, results, skipPageIndices, onProgress) {
     var bodyHtml = await getBodyHtml(item);
+    lastBodyHtmlForDebug = bodyHtml;
     var rendered = await renderEmailHtmlToPdfBytes(item, bodyHtml, options, attachments);
 
     var bodyPdf = await PDFLib.PDFDocument.load(rendered.arrayBuffer);
@@ -718,6 +726,12 @@
       var built = await buildFinalPdf(item, currentOptions());
       setStatus("Speichere PDF ...");
       Postfach2PdfCore.downloadBytes(built.bytes, built.fileName);
+      // Temporaer zur Fehlersuche: rohes Body-HTML zusaetzlich als .txt
+      // anbieten (siehe lastBodyHtmlForDebug oben).
+      if (lastBodyHtmlForDebug) {
+        var debugBytes = new TextEncoder().encode(lastBodyHtmlForDebug);
+        Postfach2PdfCore.downloadBytes(debugBytes, "postfach2pdf-debug-body.txt");
+      }
       renderResults(built.results);
       setStatus("PDF wurde erzeugt und zum Download angeboten.", "success");
     } catch (error) {
