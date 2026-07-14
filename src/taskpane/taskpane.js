@@ -457,7 +457,7 @@
   // Bild als normaler Live-Link stehen (gleiches Verhalten wie vorher).
   async function inlineExternalImages(container) {
     var imgs = Array.prototype.slice.call(container.querySelectorAll("img"));
-    var stats = { total: 0, inlined: 0, failed: 0 };
+    var stats = { total: 0, inlined: 0, failed: 0, firstError: null };
 
     await Promise.all(
       imgs.map(function (img) {
@@ -491,6 +491,20 @@
           })
           .catch(function (error) {
             stats.failed++;
+            // Nur den Hostnamen merken (nicht die volle URL mit evtl.
+            // Tracking-Tokens) + die Fehlermeldung, damit man ohne
+            // DevTools sieht, WARUM der Download scheitert (CORS? HTTP-
+            // Status? Netzwerkfehler?), ohne sensible URL-Teile
+            // preiszugeben.
+            if (!stats.firstError) {
+              var hostname = src;
+              try {
+                hostname = new URL(src).hostname;
+              } catch (e) {
+                // src war keine gueltige absolute URL - Rohwert behalten
+              }
+              stats.firstError = hostname + ": " + (error && error.message ? error.message : String(error));
+            }
             console.warn(
               "Postfach2PDF: externes Bild konnte nicht vorab eingebettet werden, bleibt als Live-Link",
               src,
@@ -610,7 +624,8 @@
         rendered.inlineImageStats.embedded + " eingebettet / " + rendered.inlineImageStats.failed +
         " fehlgeschlagen / " + rendered.inlineImageStats.total + " gesamt. Externe Bild-Downloads: " +
         rendered.imageStats.inlined + " eingebettet / " + rendered.imageStats.failed +
-        " fehlgeschlagen / " + rendered.imageStats.total + " gesamt",
+        " fehlgeschlagen / " + rendered.imageStats.total + " gesamt" +
+        (rendered.imageStats.firstError ? ". Erster Fehler: " + rendered.imageStats.firstError : ""),
     });
     var bodyPages = await targetPdf.copyPages(bodyPdf, bodyPdf.getPageIndices());
     bodyPages.forEach(function (p) {
