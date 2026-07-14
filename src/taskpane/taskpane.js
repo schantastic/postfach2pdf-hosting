@@ -558,6 +558,18 @@
     var inlineImageStats = await embedInlineAttachmentImages(item, el.renderRoot);
     var imageStats = await inlineExternalImages(el.renderRoot);
     await waitForImages(el.renderRoot);
+    // Kurze Pause, bevor html2canvas zu erfassen beginnt: Nutzer meldete
+    // fehlenden Inhalt ganz am Ende grosser Mails, der sich trotz
+    // identischem HTML/Bilder-Zustand lokal nicht reproduzieren liess -
+    // vermutlich ein Timing-/Ressourcenproblem, das nur in der echten,
+    // sehr schweren Outlook-Webseite auftritt (viel eigenes JavaScript
+    // parallel zu unserer Taskpane). Alle bisher in diesem Projekt
+    // gefundenen Rendering-Bugs waren Timing-bedingt - diese Pause gibt
+    // Layout/GC zusaetzliche Zeit, sich vor der aufwendigen Erfassung
+    // zu setzen.
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 300);
+    });
     // Fusszeile/Seitenzahl (addPageNumbers) braucht ~30pt Platz am unteren
     // Rand jeder Seite. Bei 15pt Rand ueberlappt der letzte Textabschnitt
     // einer vollen Seite die Fusszeile (mit echten Chromium-Renderings
