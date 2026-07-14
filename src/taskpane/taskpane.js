@@ -494,8 +494,8 @@
             // Nur den Hostnamen merken (nicht die volle URL mit evtl.
             // Tracking-Tokens) + die Fehlermeldung, damit man ohne
             // DevTools sieht, WARUM der Download scheitert (CORS? HTTP-
-            // Status? Netzwerkfehler?), ohne sensible URL-Teile
-            // preiszugeben.
+            // Status? Netzwerkfehler? Browser-eigener Tracker-/Werbeblocker
+            // wie Brave Shields?), ohne sensible URL-Teile preiszugeben.
             if (!stats.firstError) {
               var hostname = src;
               try {
@@ -505,8 +505,15 @@
               }
               stats.firstError = hostname + ": " + (error && error.message ? error.message : String(error));
             }
+            // Bild NICHT als lebendigen Netzwerk-Link stehen lassen: genau
+            // das fuehrt dazu, dass html2canvas beim internen DOM-Klonen
+            // haengen bleibt und ALLEN Inhalt danach verliert (reproduziert
+            // und in STATUS.md dokumentiert). Lieber ein klar erkennbarer
+            // Platzhalter als kompletter Content-Verlust ab dieser Stelle.
+            img.removeAttribute("src");
+            img.alt = "[Bild konnte nicht geladen werden]";
             console.warn(
-              "Postfach2PDF: externes Bild konnte nicht vorab eingebettet werden, bleibt als Live-Link",
+              "Postfach2PDF: externes Bild konnte nicht eingebettet werden, wird als Platzhalter entfernt",
               src,
               error
             );
