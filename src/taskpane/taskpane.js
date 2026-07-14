@@ -387,6 +387,62 @@
   // Muss mit der Breite von .mp-render-root in taskpane.css uebereinstimmen.
   var RENDER_ROOT_WIDTH = 800;
 
+  // Eingebettete (Inline-)Bilder - z. B. Signaturlogos, im Body per
+  // "cid:..." oder (in aelteren Outlook-Versionen) per interner,
+  // authentifizierter URL referenziert - sind in Wahrheit ganz normale
+  // Anhaenge mit isInline=true, nur nicht in der Anhangsliste sichtbar.
+  // Ein direkter fetch() auf die Body-URL schlaegt bei diesen IMMER fehl
+  // (0 von 13 in einem realen Testfall), weil diese URLs eine
+  // Outlook-Session brauchen, auf die unsere Taskpane keinen Zugriff hat.
+  // Der korrekte Weg ist Office.js' eigene, bereits authentifizierte
+  // getAttachmentContentAsync-API (wie fuer normale Anhaenge) statt die
+  // URL selbst abzurufen. Zuordnung ueber contentId (neueres "cid:..."-
+  // Format, Mailbox 1.16) oder ueber die Anhang-ID als Teilstring der src
+  // (aelteres Format, in dem die Anhang-ID direkt in der URL steht).
+  async function embedInlineAttachmentImages(item, container) {
+    var inlineAttachments = (item.attachments || []).filter(function (a) {
+      return a.isInline;
+    });
+    var stats = { total: inlineAttachments.length, embedded: 0, failed: 0 };
+    if (inlineAttachments.length === 0) {
+      return stats;
+    }
+
+    var imgs = Array.prototype.slice.call(container.querySelectorAll("img"));
+
+    await Promise.all(
+      inlineAttachments.map(async function (attachment) {
+        try {
+          var content = await Postfach2PdfCore.getAttachmentContent(item, attachment.id);
+          if (content.format !== Office.MailboxEnums.AttachmentContentFormat.Base64) {
+            throw new Error("unerwartetes Format " + content.format);
+          }
+          var dataUrl = "data:" + (attachment.contentType || "image/png") + ";base64," + content.content;
+          var matched = false;
+          imgs.forEach(function (img) {
+            var src = img.getAttribute("src") || "";
+            var matchesCid = attachment.contentId && src === "cid:" + attachment.contentId;
+            var matchesId = src.indexOf(attachment.id) !== -1;
+            if (matchesCid || matchesId) {
+              img.src = dataUrl;
+              matched = true;
+            }
+          });
+          if (matched) {
+            stats.embedded++;
+          } else {
+            stats.failed++;
+          }
+        } catch (error) {
+          stats.failed++;
+          console.warn("Postfach2PDF: Inline-Bild konnte nicht eingebettet werden", attachment.name, error);
+        }
+      })
+    );
+
+    return stats;
+  }
+
   // Laedt externe (http/https) Bilder selbst herunter und ersetzt src durch
   // eine data:-URI, BEVOR html2canvas ueberhaupt anfaengt. Grund: mit
   // Playwright/Chromium reproduziert - html2canvas klont das DOM fuer die
@@ -395,7 +451,9 @@
   // ~90px statt der echten Hoehe und kompletter Verlust allen Inhalts
   // danach - selbst wenn das Original-<img> im sichtbaren DOM laengst fertig
   // geladen war. Data-URIs sind synchron/sofort verfuegbar und umgehen das
-  // Problem komplett. Schlaegt der Download fehl (z. B. CORS), bleibt das
+  // Problem komplett. Schlaegt der Download fehl (z. B. CORS - erwartbar
+  // fuer echte Outlook-interne Bild-URLs, siehe embedInlineAttachmentImages
+  // oben, die das eigentlich schon vorher abfangen sollte), bleibt das
   // Bild als normaler Live-Link stehen (gleiches Verhalten wie vorher).
   async function inlineExternalImages(container) {
     var imgs = Array.prototype.slice.call(container.querySelectorAll("img"));
@@ -476,6 +534,7 @@
   async function renderEmailHtmlToPdfBytes(item, bodyHtml, options, attachmentsForHeader) {
     var documentHtml = buildDocumentHtml(item, bodyHtml, options, attachmentsForHeader);
     el.renderRoot.innerHTML = PDF_DOCUMENT_STYLE + documentHtml;
+    var inlineImageStats = await embedInlineAttachmentImages(item, el.renderRoot);
     var imageStats = await inlineExternalImages(el.renderRoot);
     await waitForImages(el.renderRoot);
     // Fusszeile/Seitenzahl (addPageNumbers) braucht ~30pt Platz am unteren
@@ -514,7 +573,12 @@
         .from(el.renderRoot)
         .toPdf()
         .outputPdf("arraybuffer");
-      return { arrayBuffer: arrayBuffer, renderRootScrollHeight: renderRootScrollHeight, imageStats: imageStats };
+      return {
+        arrayBuffer: arrayBuffer,
+        renderRootScrollHeight: renderRootScrollHeight,
+        imageStats: imageStats,
+        inlineImageStats: inlineImageStats,
+      };
     } finally {
       el.renderRoot.innerHTML = "";
     }
@@ -542,7 +606,9 @@
       status: "embedded",
       detail:
         bodyHtml.length + " Zeichen HTML, Render-Hoehe " + rendered.renderRootScrollHeight +
-        "px, " + bodyPdf.getPageCount() + " Body-Seite(n) gerendert, Bilder: " +
+        "px, " + bodyPdf.getPageCount() + " Body-Seite(n) gerendert. Inline-Anhangsbilder: " +
+        rendered.inlineImageStats.embedded + " eingebettet / " + rendered.inlineImageStats.failed +
+        " fehlgeschlagen / " + rendered.inlineImageStats.total + " gesamt. Externe Bild-Downloads: " +
         rendered.imageStats.inlined + " eingebettet / " + rendered.imageStats.failed +
         " fehlgeschlagen / " + rendered.imageStats.total + " gesamt",
     });
