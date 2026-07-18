@@ -151,9 +151,10 @@
   <footer class="mp-footer">
     <span class="mp-footer-tagline">simply fantastic solutions</span>
     <span class="mp-footer-copyright">
-      © 2026 <a href="https://schantastic.com" target="_blank" rel="noopener noreferrer">schantastic e.U.</a> · <span data-i18n="footerRights">Alle Rechte vorbehalten.</span>
+      © <span id="mp-copyright-year">2026</span> <a href="https://schantastic.com" target="_blank" rel="noopener noreferrer">schantastic e.U.</a> · <span data-i18n="footerRights">Alle Rechte vorbehalten.</span>
     </span>
   </footer>
+  <script>document.getElementById("mp-copyright-year").textContent = new Date().getFullYear();</script>
 
   <!-- Versteckter Render-Container für die HTML->PDF-Konvertierung -->
   <div class="mp-render-root-clip">
