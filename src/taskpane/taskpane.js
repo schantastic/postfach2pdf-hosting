@@ -1,4 +1,4 @@
-/* global Office, PDFLib, html2pdf, Postfach2PdfCore, document, window */
+/* global Office, PDFLib, html2pdf, Postfach2PdfCore, Postfach2PdfI18n, document, window */
 
 (function () {
   "use strict";
@@ -11,9 +11,61 @@
     loadExternalImages: "mailpdf.loadExternalImages",
     includeHeaders: "mailpdf.includeHeaders",
     pageNumbers: "mailpdf.pageNumbers",
+    language: "mailpdf.language",
   };
 
-  Office.onReady(function (info) {
+  var INTL_LOCALE_TAGS = { de: "de-DE", en: "en-US", fr: "fr-FR", es: "es-ES", it: "it-IT" };
+
+  function t(key, params) {
+    return Postfach2PdfI18n.t(key, params);
+  }
+
+  // Bereits in der aktiven UI-Sprache aufgeloeste Textbausteine fuer
+  // postfach2pdf-core.js (siehe DEFAULT_STRINGS dort fuer die erwarteten
+  // Keys) - core.js selbst kennt i18n.js bewusst nicht (siehe
+  // ARCHITECTURE.md), bekommt die Strings stattdessen hier fertig gebaut.
+  function coreStrings() {
+    return {
+      placeholderHeading: t("pdfPlaceholderHeading"),
+      labelFileName: t("pdfLabelFileName"),
+      labelType: t("pdfLabelType"),
+      labelSize: t("pdfLabelSize"),
+      footerPageOfTemplate: t("pdfFooterPageOf"),
+      footerBrand: "Postfach2PDF",
+      unknownValue: t("unknownValue"),
+      unknownSize: t("unknownSize"),
+      reasonCloudAttachment: t("reasonCloudAttachment"),
+      reasonEmbeddedOutlookItem: t("reasonEmbeddedOutlookItem"),
+      reasonSizeLimitExceededTemplate: t("reasonSizeLimitExceeded"),
+      reasonUnsupportedContentFormatTemplate: t("reasonUnsupportedContentFormat"),
+      reasonPdfEmbedFailedTemplate: t("reasonPdfEmbedFailed"),
+      reasonImageEmbedFailedTemplate: t("reasonImageEmbedFailed"),
+      reasonUnsupportedFileTypeTemplate: t("reasonUnsupportedFileType"),
+      reasonReadFailedTemplate: t("reasonReadFailed"),
+    };
+  }
+
+  function getStoredLanguage() {
+    var settings = Office.context.roamingSettings;
+    if (!settings) {
+      return "auto";
+    }
+    return settings.get(SETTINGS_KEYS.language) || "auto";
+  }
+
+  function onLanguageChanged() {
+    var settings = Office.context.roamingSettings;
+    if (!settings) {
+      window.location.reload();
+      return;
+    }
+    settings.set(SETTINGS_KEYS.language, el.language.value);
+    settings.saveAsync(function () {
+      window.location.reload();
+    });
+  }
+
+  Office.onReady(async function (info) {
     if (info.host !== Office.HostType.Outlook) {
       return;
     }
@@ -35,6 +87,7 @@
     el.renderRoot = document.getElementById("mp-render-root");
     el.result = document.getElementById("mp-result");
     el.resultList = document.getElementById("mp-result-list");
+    el.language = document.getElementById("mp-language");
 
     el.batchList = document.getElementById("mp-batch-list");
     el.batchEmpty = document.getElementById("mp-batch-empty");
@@ -43,10 +96,16 @@
     el.batchPageNumbers = document.getElementById("mp-batch-page-numbers");
     el.batchStart = document.getElementById("mp-batch-start");
 
+    var storedLanguage = getStoredLanguage();
+    await Postfach2PdfI18n.init(storedLanguage === "auto" ? null : storedLanguage, "../lib/i18n/");
+    document.documentElement.lang = Postfach2PdfI18n.getActiveLanguage();
+    Postfach2PdfI18n.applyStaticTranslations(document);
+    el.language.value = storedLanguage;
+    el.language.addEventListener("change", onLanguageChanged);
+
     if (!Office.context.requirements.isSetSupported("Mailbox", "1.8")) {
       el.unsupported.hidden = false;
-      el.unsupported.textContent =
-        "Dieses Outlook unterstuetzt die fuer Postfach2PDF benoetigte Mailbox-API (1.8, fuer Anhangszugriff) nicht.";
+      el.unsupported.textContent = t("errorUnsupportedMailbox18");
       return;
     }
 
@@ -58,9 +117,7 @@
       initBatchMode();
     } else {
       el.unsupported.hidden = false;
-      el.unsupported.textContent =
-        "Kein geoeffnetes Element und keine Mehrfachauswahl-API (Mailbox 1.13) verfuegbar. " +
-        "Bitte eine E-Mail einzeln oeffnen.";
+      el.unsupported.textContent = t("errorUnsupportedNoSelection13");
     }
   });
 
@@ -96,7 +153,8 @@
       return "";
     }
     try {
-      return new Intl.DateTimeFormat("de-DE", {
+      var locale = INTL_LOCALE_TAGS[Postfach2PdfI18n.getActiveLanguage()] || "en-US";
+      return new Intl.DateTimeFormat(locale, {
         dateStyle: "medium",
         timeStyle: "short",
       }).format(date);
@@ -125,15 +183,15 @@
       if (entry.status === "embedded") {
         icon.textContent = "✓";
         icon.setAttribute("data-kind", "ok");
-        label.textContent = entry.name + " — " + (entry.detail || "eingebettet");
+        label.textContent = entry.name + " — " + (entry.detail || t("resultDetailEmbeddedDefault"));
       } else if (entry.status === "skipped") {
         icon.textContent = "–";
         icon.setAttribute("data-kind", "skip");
-        label.textContent = entry.name + " — " + (entry.detail || "uebersprungen (manuell abgewaehlt)");
+        label.textContent = entry.name + " — " + (entry.detail || t("resultDetailSkippedDefault"));
       } else {
         icon.textContent = "⚠";
         icon.setAttribute("data-kind", "warn");
-        label.textContent = entry.name + " — " + (entry.reason || entry.detail || "Fehler");
+        label.textContent = entry.name + " — " + (entry.reason || entry.detail || t("resultDetailErrorDefault"));
       }
 
       li.appendChild(icon);
@@ -158,7 +216,7 @@
 
   function renderSummary() {
     var item = currentItem();
-    el.subject.textContent = item.subject || "(kein Betreff)";
+    el.subject.textContent = item.subject || t("fallbackNoSubject");
     el.from.textContent = formatAddress(item.from);
     el.date.textContent = formatDate(item.dateTimeCreated);
   }
@@ -191,12 +249,14 @@
 
       var nameSpan = document.createElement("span");
       nameSpan.className = "mp-attachment-name";
-      nameSpan.textContent = attachment.name || "(unbenannt)";
+      nameSpan.textContent = attachment.name || t("fallbackUnnamed");
 
       var detailSpan = document.createElement("span");
       detailSpan.className = "mp-attachment-detail";
       detailSpan.textContent =
-        (attachment.contentType || "unbekannter Typ") + " · " + Postfach2PdfCore.formatBytes(attachment.size);
+        (attachment.contentType || t("fallbackUnknownType")) +
+        " · " +
+        Postfach2PdfCore.formatBytes(attachment.size, t("unknownSize"));
 
       label.appendChild(nameSpan);
       label.appendChild(detailSpan);
@@ -260,12 +320,13 @@
   function buildFileName(item) {
     var datePart = item.dateTimeCreated
       ? item.dateTimeCreated.toISOString().slice(0, 10)
-      : "unbekannt-datum";
+      : t("fileNameUnknownDate");
     var senderPart =
       Postfach2PdfCore.sanitizeFileNamePart(
-        (item.from && (item.from.displayName || item.from.emailAddress)) || "unbekannt"
-      ) || "unbekannt";
-    var subjectPart = Postfach2PdfCore.sanitizeFileNamePart(item.subject || "kein Betreff") || "kein Betreff";
+        (item.from && (item.from.displayName || item.from.emailAddress)) || t("fileNameUnknownSender")
+      ) || t("fileNameUnknownSender");
+    var subjectPart =
+      Postfach2PdfCore.sanitizeFileNamePart(item.subject || t("fileNameNoSubject")) || t("fileNameNoSubject");
     var stem = Postfach2PdfCore.sanitizeFileNameStem(datePart + "_" + senderPart + "_" + subjectPart);
     return stem + ".pdf";
   }
@@ -318,27 +379,27 @@
 
   function buildDocumentHtml(item, bodyHtml, options, selectedAttachments) {
     var headerRows = [
-      ["Betreff", escapeHtml(item.subject || "(kein Betreff)")],
-      ["Von", escapeHtml(formatAddress(item.from))],
-      ["An", escapeHtml(formatAddressList(item.to))],
+      [t("labelSubject"), escapeHtml(item.subject || t("fallbackNoSubject"))],
+      [t("labelFrom"), escapeHtml(formatAddress(item.from))],
+      [t("labelTo"), escapeHtml(formatAddressList(item.to))],
     ];
     if (item.cc && item.cc.length > 0) {
-      headerRows.push(["CC", escapeHtml(formatAddressList(item.cc))]);
+      headerRows.push([t("labelCc"), escapeHtml(formatAddressList(item.cc))]);
     }
-    headerRows.push(["Datum", escapeHtml(formatDate(item.dateTimeCreated))]);
+    headerRows.push([t("labelDate"), escapeHtml(formatDate(item.dateTimeCreated))]);
 
     if (options.includeHeaders) {
       if (item.internetMessageId) {
-        headerRows.push(["Nachrichten-ID", escapeHtml(item.internetMessageId)]);
+        headerRows.push([t("labelMessageId"), escapeHtml(item.internetMessageId)]);
       }
       if (item.conversationId) {
-        headerRows.push(["Konversations-ID", escapeHtml(item.conversationId)]);
+        headerRows.push([t("labelConversationId"), escapeHtml(item.conversationId)]);
       }
     }
 
     if (selectedAttachments.length > 0) {
       headerRows.push([
-        "Anhaenge",
+        t("labelAttachments"),
         escapeHtml(selectedAttachments.map(function (a) { return a.name; }).join(", ")),
       ]);
     }
@@ -360,7 +421,7 @@
     return (
       '<div class="mp-pdf-document">' +
       '<h1 class="mp-pdf-subject">' +
-      escapeHtml(item.subject || "(kein Betreff)") +
+      escapeHtml(item.subject || t("fallbackNoSubject")) +
       "</h1>" +
       '<table class="mp-pdf-header">' +
       headerHtml +
@@ -614,7 +675,7 @@
         onProgress(attachment, i, attachments.length);
       }
       var pageCountBefore = targetPdf.getPageCount();
-      var outcome = await Postfach2PdfCore.embedAttachmentIntoPdf(item, targetPdf, attachment);
+      var outcome = await Postfach2PdfCore.embedAttachmentIntoPdf(item, targetPdf, attachment, coreStrings());
       if (outcome.rawCopy) {
         var pageCountAfter = targetPdf.getPageCount();
         for (var p = pageCountBefore; p < pageCountAfter; p++) {
@@ -638,7 +699,7 @@
     mergedPdf.setCreationDate(new Date());
 
     await renderEmailPagesInto(item, options, selectedAttachments, mergedPdf, results, skipPageIndices, function (attachment, i, total) {
-      setStatus("Verarbeite Anhang " + (i + 1) + "/" + total + ": " + attachment.name + " ...");
+      setStatus(t("statusProcessingAttachment", { index: i + 1, total: total, name: attachment.name }));
     });
 
     deselectedAttachments.forEach(function (attachment) {
@@ -646,11 +707,11 @@
     });
 
     if (options.pageNumbers) {
-      setStatus("Fuege Seitenzahlen hinzu ...");
-      await Postfach2PdfCore.addPageNumbers(mergedPdf, skipPageIndices);
+      setStatus(t("statusAddingPageNumbers"));
+      await Postfach2PdfCore.addPageNumbers(mergedPdf, skipPageIndices, coreStrings());
     }
 
-    setStatus("Erzeuge PDF-Bytes ...");
+    setStatus(t("statusCreatingPdfBytes"));
     var finalBytes = await mergedPdf.save();
     var fileName = buildFileName(item);
 
@@ -668,20 +729,20 @@
   async function onGenerateClicked() {
     el.generate.disabled = true;
     el.result.hidden = true;
-    setStatus("Erzeuge PDF ...");
+    setStatus(t("statusGeneratingPdf"));
 
     var item = currentItem();
 
     try {
       var built = await buildFinalPdf(item, currentOptions());
-      setStatus("Speichere PDF ...");
+      setStatus(t("statusSavingPdf"));
       Postfach2PdfCore.downloadBytes(built.bytes, built.fileName);
       renderResults(built.results);
-      setStatus("PDF wurde erzeugt und zum Download angeboten.", "success");
+      setStatus(t("statusPdfSuccess"), "success");
     } catch (error) {
       console.error("Postfach2PDF: PDF-Erzeugung fehlgeschlagen", error);
       setStatus(
-        "Fehler bei der PDF-Erzeugung: " + (error && error.message ? error.message : error),
+        t("errorPdfGenerationPrefix", { message: error && error.message ? error.message : error }),
         "error"
       );
     } finally {
@@ -833,11 +894,11 @@
 
       var nameSpan = document.createElement("span");
       nameSpan.className = "mp-attachment-name";
-      nameSpan.textContent = message.subject || "(kein Betreff)";
+      nameSpan.textContent = message.subject || t("fallbackNoSubject");
 
       var detailSpan = document.createElement("span");
       detailSpan.className = "mp-attachment-detail";
-      detailSpan.textContent = message.hasAttachments ? "hat Anhaenge" : "keine Anhaenge";
+      detailSpan.textContent = message.hasAttachments ? t("fallbackHasAttachments") : t("fallbackNoAttachmentsShort");
 
       label.appendChild(nameSpan);
       label.appendChild(detailSpan);
@@ -866,7 +927,7 @@
 
   function buildBatchFileName(messages) {
     var stem = Postfach2PdfCore.sanitizeFileNameStem(
-      new Date().toISOString().slice(0, 10) + "_Postfach2PDF-Batch_" + messages.length + "-Mails"
+      new Date().toISOString().slice(0, 10) + "_Postfach2PDF-Batch_" + messages.length + "-" + t("fileNameMailsUnit")
     );
     return stem + ".pdf";
   }
@@ -880,20 +941,26 @@
     var skipPageIndices = [];
 
     for (var i = 0; i < messages.length; i++) {
-      setStatus("Lade E-Mail " + (i + 1) + "/" + messages.length + ": " + (messages[i].subject || "") + " ...");
+      setStatus(t("statusLoadingEmail", { index: i + 1, total: messages.length, subject: messages[i].subject || "" }));
       var item = await loadItemByIdAsync(messages[i].itemId);
       try {
         var attachments = nonInlineAttachments(item);
         var itemResults = [];
         await renderEmailPagesInto(item, options, attachments, mergedPdf, itemResults, skipPageIndices, function (attachment, j, total) {
           setStatus(
-            "E-Mail " + (i + 1) + "/" + messages.length + " – Anhang " + (j + 1) + "/" + total + ": " + attachment.name + " ..."
+            t("statusEmailAttachmentProgress", {
+              emailIndex: i + 1,
+              emailTotal: messages.length,
+              attIndex: j + 1,
+              attTotal: total,
+              name: attachment.name,
+            })
           );
         });
         overallResults.push({
-          name: messages[i].subject || "(kein Betreff)",
+          name: messages[i].subject || t("fallbackNoSubject"),
           status: itemResults.some(function (r) { return r.status !== "embedded"; }) ? "failed" : "embedded",
-          reason: "in gemeinsame PDF eingebettet (" + itemResults.length + " Anhang-Ergebnisse)",
+          reason: t("resultMergedIntoSharedPdf", { count: itemResults.length }),
         });
       } finally {
         await unloadItemAsync(item);
@@ -901,8 +968,8 @@
     }
 
     if (options.pageNumbers) {
-      setStatus("Fuege Seitenzahlen hinzu ...");
-      await Postfach2PdfCore.addPageNumbers(mergedPdf, skipPageIndices);
+      setStatus(t("statusAddingPageNumbers"));
+      await Postfach2PdfCore.addPageNumbers(mergedPdf, skipPageIndices, coreStrings());
     }
 
     var bytes = await mergedPdf.save();
@@ -915,7 +982,7 @@
     var overallResults = [];
 
     for (var i = 0; i < messages.length; i++) {
-      setStatus("Lade E-Mail " + (i + 1) + "/" + messages.length + ": " + (messages[i].subject || "") + " ...");
+      setStatus(t("statusLoadingEmail", { index: i + 1, total: messages.length, subject: messages[i].subject || "" }));
       var item = await loadItemByIdAsync(messages[i].itemId);
       try {
         var attachments = nonInlineAttachments(item);
@@ -930,12 +997,18 @@
 
         await renderEmailPagesInto(item, options, attachments, singleDoc, itemResults, skipPageIndices, function (attachment, j, total) {
           setStatus(
-            "E-Mail " + (i + 1) + "/" + messages.length + " – Anhang " + (j + 1) + "/" + total + ": " + attachment.name + " ..."
+            t("statusEmailAttachmentProgress", {
+              emailIndex: i + 1,
+              emailTotal: messages.length,
+              attIndex: j + 1,
+              attTotal: total,
+              name: attachment.name,
+            })
           );
         });
 
         if (options.pageNumbers) {
-          await Postfach2PdfCore.addPageNumbers(singleDoc, skipPageIndices);
+          await Postfach2PdfCore.addPageNumbers(singleDoc, skipPageIndices, coreStrings());
         }
 
         var bytes = await singleDoc.save();
@@ -943,9 +1016,9 @@
         Postfach2PdfCore.downloadBytes(bytes, fileName);
 
         overallResults.push({
-          name: messages[i].subject || "(kein Betreff)",
+          name: messages[i].subject || t("fallbackNoSubject"),
           status: itemResults.some(function (r) { return r.status !== "embedded"; }) ? "failed" : "embedded",
-          reason: "als eigene PDF (" + fileName + ") gespeichert",
+          reason: t("resultSavedAsSeparatePdf", { fileName: fileName }),
         });
       } finally {
         await unloadItemAsync(item);
@@ -964,11 +1037,11 @@
   async function onBatchStartClicked() {
     el.batchStart.disabled = true;
     el.result.hidden = true;
-    setStatus("Starte Batch-Verarbeitung ...");
+    setStatus(t("statusStartingBatch"));
 
     var messages = getSelectedBatchMessages();
     if (messages.length === 0) {
-      setStatus("Keine E-Mails ausgewaehlt.", "error");
+      setStatus(t("errorNoEmailsSelected"), "error");
       el.batchStart.disabled = false;
       return;
     }
@@ -987,14 +1060,14 @@
         return r.status === "failed";
       }).length;
       if (failedCount === 0) {
-        setStatus(messages.length + " E-Mail(s) erfolgreich verarbeitet.", "success");
+        setStatus(Postfach2PdfI18n.plural("batchSuccess", messages.length), "success");
       } else {
-        setStatus(failedCount + " von " + messages.length + " E-Mails hatten Probleme, siehe Ergebnis.", "error");
+        setStatus(t("statusBatchPartialFailure", { failed: failedCount, total: messages.length }), "error");
       }
     } catch (error) {
       console.error("Postfach2PDF: Batch-Verarbeitung fehlgeschlagen", error);
       setStatus(
-        "Fehler bei der Batch-Verarbeitung: " + (error && error.message ? error.message : error),
+        t("errorBatchPrefix", { message: error && error.message ? error.message : error }),
         "error"
       );
     } finally {

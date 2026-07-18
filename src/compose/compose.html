@@ -4,10 +4,11 @@
   <meta charset="UTF-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Postfach2PDF – Anhänge konvertieren</title>
+  <title data-i18n="pageTitleCompose">Postfach2PDF – Anhänge konvertieren</title>
 
   <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
   <script src="../lib/pdf-lib.min.js"></script>
+  <script src="../lib/i18n.js"></script>
   <script src="../lib/postfach2pdf-core.js"></script>
   <link rel="stylesheet" href="../taskpane/taskpane.css" />
 </head>
@@ -18,59 +19,70 @@
       <h1>Postfach2PDF</h1>
       <span class="mp-header-byline">by schantastic</span>
     </div>
+    <label class="mp-language-select">
+      <select id="mp-language" aria-label="Sprache" data-i18n-attr-aria-label="labelLanguage" data-i18n-attr-title="labelLanguage">
+        <option value="auto" data-i18n="languageAuto">Automatisch</option>
+        <option value="de" data-i18n="languageDe">Deutsch</option>
+        <option value="en" data-i18n="languageEn">English</option>
+        <option value="fr" data-i18n="languageFr">Français</option>
+        <option value="es" data-i18n="languageEs">Español</option>
+        <option value="it" data-i18n="languageIt">Italiano</option>
+      </select>
+    </label>
   </header>
 
   <main id="mp-app" class="mp-app" hidden>
     <section class="mp-attachments-section">
-      <h2 class="mp-section-title">Anhänge dieser Nachricht</h2>
+      <h2 class="mp-section-title" data-i18n="sectionAttachmentsThisMessage">Anhänge dieser Nachricht</h2>
       <ul id="mp-attachment-list" class="mp-attachment-list"></ul>
-      <p id="mp-no-attachments" class="mp-note" hidden>Diese Nachricht hat noch keine Anhänge.</p>
+      <p id="mp-no-attachments" class="mp-note" data-i18n="noAttachmentsCompose" hidden>Diese Nachricht hat noch keine Anhänge.</p>
     </section>
 
     <section class="mp-options">
-      <h2 class="mp-section-title">Optionen</h2>
+      <h2 class="mp-section-title" data-i18n="sectionOptions">Optionen</h2>
       <label class="mp-checkbox">
         <input type="checkbox" id="mp-merge" checked />
-        Ausgewählte Anhänge zu einer gemeinsamen PDF zusammenfassen
+        <span data-i18n="optionMergeAttachments">Ausgewählte Anhänge zu einer gemeinsamen PDF zusammenfassen</span>
       </label>
       <label class="mp-checkbox">
         <input type="checkbox" id="mp-remove-originals" checked />
-        Original-Anhänge nach erfolgreicher Konvertierung entfernen
+        <span data-i18n="optionRemoveOriginals">Original-Anhänge nach erfolgreicher Konvertierung entfernen</span>
       </label>
     </section>
 
     <section class="mp-actions">
-      <button id="mp-convert" class="mp-button-primary">Anhänge in PDF umwandeln</button>
+      <button id="mp-convert" class="mp-button-primary" data-i18n="buttonConvertAttachments">Anhänge in PDF umwandeln</button>
       <span id="mp-status" class="mp-status" role="status" aria-live="polite"></span>
     </section>
 
     <section id="mp-result" class="mp-result" hidden>
-      <h2 class="mp-section-title">Ergebnis</h2>
+      <h2 class="mp-section-title" data-i18n="sectionResult">Ergebnis</h2>
       <ul id="mp-result-list" class="mp-result-list"></ul>
     </section>
 
     <section class="mp-note">
-      <p>
+      <p data-i18n="noteConvertSupportedTypes">
         Nur PDF- und Bildanhänge (JPG/PNG/GIF/BMP/WEBP) können automatisch
         konvertiert werden – solche Zeilen sind unten deaktiviert markiert.
         Nicht unterstützte Anhänge bleiben unverändert an der Nachricht.
       </p>
       <p>
-        Bei einem Fehler bei einem einzelnen Anhang bleibt genau dieser
-        Original-Anhang unangetastet erhalten. Die Nachricht wird
-        <strong>nie</strong> automatisch gesendet.
+        <span data-i18n="noteNeverSendPre">Bei einem Fehler bei einem einzelnen Anhang bleibt genau dieser
+        Original-Anhang unangetastet erhalten. Die Nachricht wird</span>
+        <strong data-i18n="noteNeverSendStrong">nie</strong>
+        <span data-i18n="noteNeverSendPost">automatisch gesendet.</span>
       </p>
     </section>
   </main>
 
-  <p id="mp-unsupported" class="mp-note" hidden>
+  <p id="mp-unsupported" class="mp-note" data-i18n="errorUnsupportedMailbox18" hidden>
     Dieses Outlook unterstützt die für Postfach2PDF benötigte Mailbox-API (1.8) nicht.
   </p>
 
   <footer class="mp-footer">
     <span class="mp-footer-tagline">simply fantastic solutions</span>
     <span class="mp-footer-copyright">
-      © 2026 <a href="https://schantastic.com" target="_blank" rel="noopener noreferrer">schantastic e.U.</a> · Alle Rechte vorbehalten.
+      © 2026 <a href="https://schantastic.com" target="_blank" rel="noopener noreferrer">schantastic e.U.</a> · <span data-i18n="footerRights">Alle Rechte vorbehalten.</span>
     </span>
   </footer>
 

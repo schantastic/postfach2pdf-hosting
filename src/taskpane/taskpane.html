@@ -4,11 +4,12 @@
   <meta charset="UTF-8" />
   <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Postfach2PDF</title>
+  <title data-i18n="pageTitleRead">Postfach2PDF</title>
 
   <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
   <script src="../lib/html2pdf.bundle.min.js"></script>
   <script src="../lib/pdf-lib.min.js"></script>
+  <script src="../lib/i18n.js"></script>
   <script src="../lib/postfach2pdf-core.js"></script>
   <link rel="stylesheet" href="taskpane.css" />
 </head>
@@ -19,43 +20,53 @@
       <h1>Postfach2PDF</h1>
       <span class="mp-header-byline">by schantastic</span>
     </div>
+    <label class="mp-language-select">
+      <select id="mp-language" aria-label="Sprache" data-i18n-attr-aria-label="labelLanguage" data-i18n-attr-title="labelLanguage">
+        <option value="auto" data-i18n="languageAuto">Automatisch</option>
+        <option value="de" data-i18n="languageDe">Deutsch</option>
+        <option value="en" data-i18n="languageEn">English</option>
+        <option value="fr" data-i18n="languageFr">Français</option>
+        <option value="es" data-i18n="languageEs">Español</option>
+        <option value="it" data-i18n="languageIt">Italiano</option>
+      </select>
+    </label>
   </header>
 
   <main id="mp-app" class="mp-app" hidden>
     <section class="mp-summary">
-      <div class="mp-row"><span class="mp-label">Betreff</span><span id="mp-subject" class="mp-value"></span></div>
-      <div class="mp-row"><span class="mp-label">Von</span><span id="mp-from" class="mp-value"></span></div>
-      <div class="mp-row"><span class="mp-label">Datum</span><span id="mp-date" class="mp-value"></span></div>
+      <div class="mp-row"><span class="mp-label" data-i18n="labelSubject">Betreff</span><span id="mp-subject" class="mp-value"></span></div>
+      <div class="mp-row"><span class="mp-label" data-i18n="labelFrom">Von</span><span id="mp-from" class="mp-value"></span></div>
+      <div class="mp-row"><span class="mp-label" data-i18n="labelDate">Datum</span><span id="mp-date" class="mp-value"></span></div>
     </section>
 
     <section class="mp-attachments-section">
-      <h2 class="mp-section-title">Anhänge</h2>
+      <h2 class="mp-section-title" data-i18n="sectionAttachments">Anhänge</h2>
       <ul id="mp-attachment-list" class="mp-attachment-list"></ul>
-      <p id="mp-no-attachments" class="mp-note" hidden>Keine Anhänge vorhanden.</p>
+      <p id="mp-no-attachments" class="mp-note" data-i18n="noAttachments" hidden>Keine Anhänge vorhanden.</p>
     </section>
 
     <section class="mp-options">
-      <h2 class="mp-section-title">Optionen</h2>
+      <h2 class="mp-section-title" data-i18n="sectionOptions">Optionen</h2>
       <label class="mp-checkbox">
         <input type="checkbox" id="mp-load-external-images" />
-        Externe Bilder laden (Datenschutzrisiko: kann Tracking-Pixel nachladen)
+        <span data-i18n="optionLoadExternalImages">Externe Bilder laden (Datenschutzrisiko: kann Tracking-Pixel nachladen)</span>
       </label>
       <label class="mp-checkbox">
         <input type="checkbox" id="mp-include-headers" />
-        Internet-Header (Nachrichten-ID, Konversations-ID) mit ausdrucken
+        <span data-i18n="optionIncludeHeaders">Internet-Header (Nachrichten-ID, Konversations-ID) mit ausdrucken</span>
       </label>
       <label class="mp-checkbox">
         <input type="checkbox" id="mp-page-numbers" />
-        Seitenzahlen und Fußzeile auf jeder Seite einfügen
+        <span data-i18n="optionPageNumbers">Seitenzahlen und Fußzeile auf jeder Seite einfügen</span>
       </label>
     </section>
 
     <section class="mp-actions">
-      <button id="mp-generate" class="mp-button-primary">Als PDF speichern</button>
+      <button id="mp-generate" class="mp-button-primary" data-i18n="buttonSaveAsPdf">Als PDF speichern</button>
     </section>
 
     <section class="mp-note">
-      <p>
+      <p data-i18n="noteCapabilities">
         Diese Version erzeugt eine fortlaufende PDF aus Betreff, Kopfzeilen,
         Nachrichtentext und den oben ausgewählten Anhängen. PDF-Anhänge
         werden seitengetreu angehängt, Bilder (JPG/PNG/GIF/BMP/WEBP) werden
@@ -63,7 +74,7 @@
         Office-Dokumente, ZIP, TIFF) erhalten eine Hinweisseite mit
         Dateiname und Grund statt stillschweigend zu fehlen.
       </p>
-      <p>
+      <p data-i18n="noteNoServer">
         Die gesamte Verarbeitung läuft direkt im Taskpane (im
         Browser-Kontext von Outlook). Es gibt keinen eigenen Server, an den
         Inhalte gesendet werden – die erzeugte PDF wird per
@@ -75,44 +86,45 @@
   <main id="mp-batch" class="mp-app" hidden>
     <section class="mp-note">
       <p>
-        <strong>Mehrfachauswahl erkannt.</strong> Diese Ansicht verarbeitet
+        <strong data-i18n="batchNoticeStrong">Mehrfachauswahl erkannt.</strong>
+        <span data-i18n="batchNoticeRest">Diese Ansicht verarbeitet
         alle unten ausgewählten E-Mails nacheinander. Ob Outlook das
         Menüband-Kommando bei einer Mehrfachauswahl überhaupt so aufruft,
         ist client- und versionsabhängig – ist diese Ansicht leer oder
         erscheint stattdessen die Einzel-Ansicht, öffne stattdessen jede
-        E-Mail einzeln.
+        E-Mail einzeln.</span>
       </p>
     </section>
 
     <section class="mp-attachments-section">
-      <h2 class="mp-section-title">Ausgewählte E-Mails</h2>
+      <h2 class="mp-section-title" data-i18n="sectionSelectedEmails">Ausgewählte E-Mails</h2>
       <ul id="mp-batch-list" class="mp-attachment-list"></ul>
-      <p id="mp-batch-empty" class="mp-note" hidden>Keine Mehrfachauswahl erkannt.</p>
+      <p id="mp-batch-empty" class="mp-note" data-i18n="batchEmpty" hidden>Keine Mehrfachauswahl erkannt.</p>
     </section>
 
     <section class="mp-options">
-      <h2 class="mp-section-title">Optionen</h2>
+      <h2 class="mp-section-title" data-i18n="sectionOptions">Optionen</h2>
       <label class="mp-checkbox">
         <input type="checkbox" id="mp-batch-merge" checked />
-        Alle ausgewählten E-Mails zu einer gemeinsamen, fortlaufenden PDF zusammenfassen
-        (sonst: eine PDF pro E-Mail)
+        <span data-i18n="optionBatchMerge">Alle ausgewählten E-Mails zu einer gemeinsamen, fortlaufenden PDF zusammenfassen
+        (sonst: eine PDF pro E-Mail)</span>
       </label>
       <label class="mp-checkbox">
         <input type="checkbox" id="mp-batch-include-headers" />
-        Internet-Header mit ausdrucken
+        <span data-i18n="optionIncludeHeaders">Internet-Header mit ausdrucken</span>
       </label>
       <label class="mp-checkbox">
         <input type="checkbox" id="mp-batch-page-numbers" checked />
-        Seitenzahlen und Fußzeile einfügen
+        <span data-i18n="optionPageNumbers">Seitenzahlen und Fußzeile einfügen</span>
       </label>
     </section>
 
     <section class="mp-actions">
-      <button id="mp-batch-start" class="mp-button-primary">Batch starten</button>
+      <button id="mp-batch-start" class="mp-button-primary" data-i18n="buttonBatchStart">Batch starten</button>
     </section>
 
     <section class="mp-note">
-      <p>
+      <p data-i18n="noteBatchInfo">
         Anhänge werden je E-Mail automatisch vollständig eingebettet (wie
         bei "Als PDF speichern", aber ohne Einzelauswahl pro Anhang).
         Externe Bilder werden im Batch-Modus immer blockiert. Bei "eine PDF
@@ -122,7 +134,7 @@
     </section>
   </main>
 
-  <p id="mp-unsupported" class="mp-note" hidden>
+  <p id="mp-unsupported" class="mp-note" data-i18n="errorUnsupportedMailbox18" hidden>
     Dieses Outlook unterstützt die für Postfach2PDF benötigte Mailbox-API (1.8) nicht.
   </p>
 
@@ -131,7 +143,7 @@
       <span id="mp-status" class="mp-status" role="status" aria-live="polite"></span>
     </section>
     <section id="mp-result" class="mp-result" hidden>
-      <h2 class="mp-section-title">Ergebnis</h2>
+      <h2 class="mp-section-title" data-i18n="sectionResult">Ergebnis</h2>
       <ul id="mp-result-list" class="mp-result-list"></ul>
     </section>
   </div>
@@ -139,7 +151,7 @@
   <footer class="mp-footer">
     <span class="mp-footer-tagline">simply fantastic solutions</span>
     <span class="mp-footer-copyright">
-      © 2026 <a href="https://schantastic.com" target="_blank" rel="noopener noreferrer">schantastic e.U.</a> · Alle Rechte vorbehalten.
+      © 2026 <a href="https://schantastic.com" target="_blank" rel="noopener noreferrer">schantastic e.U.</a> · <span data-i18n="footerRights">Alle Rechte vorbehalten.</span>
     </span>
   </footer>
 

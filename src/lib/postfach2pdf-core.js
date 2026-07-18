@@ -2,8 +2,12 @@
 /**
  * Postfach2PDF Core: gemeinsame Hilfsfunktionen fuer Lese- und Verfassen-Taskpane.
  * Haengt sich als window.Postfach2PdfCore an; haengt selbst nur von PDFLib und
- * Office.js ab (kein DOM-Zugriff), damit beide Taskpanes es unveraendert
- * wiederverwenden koennen.
+ * Office.js ab (kein DOM-Zugriff, keine Abhaengigkeit von i18n.js), damit
+ * beide Taskpanes es unveraendert wiederverwenden koennen. Text, der in die
+ * PDF gezeichnet wird, kommt ueber den optionalen "strings"-Parameter herein
+ * (vom Aufrufer bereits in der aktiven UI-Sprache aufgeloest) - ohne diesen
+ * Parameter gelten die deutschen Standardwerte unten (Abwaertskompatibilitaet
+ * fuer isolierte Aufrufer/Testskripte).
  */
 (function (global) {
   "use strict";
@@ -24,6 +28,52 @@
     "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
     "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
   ];
+
+  var DEFAULT_STRINGS = {
+    placeholderHeading: "Anhang nicht eingebettet",
+    labelFileName: "Dateiname",
+    labelType: "Typ",
+    labelSize: "Größe",
+    footerPageOfTemplate: "Seite {current} von {total}",
+    footerBrand: "Postfach2PDF",
+    unknownValue: "unbekannt",
+    unknownSize: "unbekannte Größe",
+    reasonCloudAttachment: "Cloud-Anhang (Freigabelink): Inhalt kann in dieser Version nicht automatisch gelesen werden.",
+    reasonEmbeddedOutlookItem: "Eingebettetes Outlook-Element (z. B. Mail/Termin/Kontakt) wird in dieser Version nicht automatisch umgewandelt.",
+    reasonSizeLimitExceededTemplate: "Anhang wurde übersprungen: Größe ({size}) liegt über dem Limit von {limit} für diese Version.",
+    reasonUnsupportedContentFormatTemplate: "Anhangsinhalt liegt in einem Format vor ({format}), das in dieser Version nicht verarbeitet wird.",
+    reasonPdfEmbedFailedTemplate: "PDF-Anhang konnte nicht eingebettet werden (evtl. verschlüsselt oder beschädigt): {message}",
+    reasonImageEmbedFailedTemplate: "Bild-Anhang konnte nicht eingebettet werden: {message}",
+    reasonUnsupportedFileTypeTemplate: "Automatische Umwandlung dieses Dateityps ({type}) ist in dieser Version nicht implementiert.",
+    reasonReadFailedTemplate: "Anhang konnte nicht gelesen werden: {message}",
+  };
+
+  function resolveStrings(strings) {
+    var merged = {};
+    var key;
+    for (key in DEFAULT_STRINGS) {
+      if (Object.prototype.hasOwnProperty.call(DEFAULT_STRINGS, key)) {
+        merged[key] = DEFAULT_STRINGS[key];
+      }
+    }
+    if (strings) {
+      for (key in strings) {
+        if (Object.prototype.hasOwnProperty.call(strings, key) && strings[key]) {
+          merged[key] = strings[key];
+        }
+      }
+    }
+    return merged;
+  }
+
+  function interpolate(template, params) {
+    if (!params) {
+      return template;
+    }
+    return String(template).replace(/\{(\w+)\}/g, function (match, name) {
+      return Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : match;
+    });
+  }
 
   // ---------------------------------------------------------------------
   // Dateinamen (Windows-sicher)
@@ -58,9 +108,9 @@
   // Bytes / Base64
   // ---------------------------------------------------------------------
 
-  function formatBytes(bytes) {
+  function formatBytes(bytes, unknownSizeText) {
     if (typeof bytes !== "number" || isNaN(bytes)) {
-      return "unbekannte Groesse";
+      return unknownSizeText || DEFAULT_STRINGS.unknownSize;
     }
     if (bytes < 1024) {
       return bytes + " B";
@@ -92,6 +142,8 @@
 
   function sanitizeForStandardFont(text) {
     // Standard-PDF-Fonts (WinAnsi) decken nur Latin-1 (Codepunkte 0-255) ab.
+    // Alle bisher unterstuetzten Sprachen (de/en/fr/es/it) sind reine
+    // Latin-Schriften und passen darin, kein Font-Wechsel noetig.
     return String(text).replace(/[^\x00-\xFF]/g, "?");
   }
 
@@ -183,7 +235,8 @@
   // PDF-Seiten erzeugen
   // ---------------------------------------------------------------------
 
-  async function addPlaceholderPage(mergedPdf, attachment, reason) {
+  async function addPlaceholderPage(mergedPdf, attachment, reason, strings) {
+    var s = resolveStrings(strings);
     var page = mergedPdf.addPage(PAGE_SIZE_A4);
     var font = await mergedPdf.embedFont(PDFLib.StandardFonts.Helvetica);
     var boldFont = await mergedPdf.embedFont(PDFLib.StandardFonts.HelveticaBold);
@@ -203,11 +256,11 @@
       y -= size + 8;
     }
 
-    drawLine("Anhang nicht eingebettet", { font: boldFont, size: 16 });
+    drawLine(s.placeholderHeading, { font: boldFont, size: 16 });
     y -= 4;
-    drawLine("Dateiname: " + (attachment.name || "unbekannt"));
-    drawLine("Typ: " + (attachment.contentType || "unbekannt"));
-    drawLine("Groesse: " + formatBytes(attachment.size));
+    drawLine(s.labelFileName + ": " + (attachment.name || s.unknownValue));
+    drawLine(s.labelType + ": " + (attachment.contentType || s.unknownValue));
+    drawLine(s.labelSize + ": " + formatBytes(attachment.size, s.unknownSize));
     y -= 8;
     wrapText(reason, 85).forEach(function (line) {
       drawLine(line);
@@ -216,7 +269,8 @@
     return { status: "placeholder", reason: reason };
   }
 
-  async function embedPdfAttachment(mergedPdf, bytes, attachment) {
+  async function embedPdfAttachment(mergedPdf, bytes, attachment, strings) {
+    var s = resolveStrings(strings);
     try {
       var srcDoc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
       var copiedPages = await mergedPdf.copyPages(srcDoc, srcDoc.getPageIndices());
@@ -229,14 +283,15 @@
       // ueberlagert die Fusszeile echten Anhangsinhalt.
       return { status: "embedded", rawCopy: true };
     } catch (error) {
-      var reason =
-        "PDF-Anhang konnte nicht eingebettet werden (evtl. verschluesselt oder beschaedigt): " +
-        (error && error.message ? error.message : error);
-      return addPlaceholderPage(mergedPdf, attachment, reason);
+      var reason = interpolate(s.reasonPdfEmbedFailedTemplate, {
+        message: error && error.message ? error.message : error,
+      });
+      return addPlaceholderPage(mergedPdf, attachment, reason, strings);
     }
   }
 
-  async function embedImageAttachment(mergedPdf, bytes, contentType, attachment) {
+  async function embedImageAttachment(mergedPdf, bytes, contentType, attachment, strings) {
+    var s = resolveStrings(strings);
     try {
       var rasterized = await rasterizeToPngBytes(bytes, contentType);
       var pngImage = await mergedPdf.embedPng(rasterized.bytes);
@@ -255,76 +310,63 @@
       });
       return { status: "embedded" };
     } catch (error) {
-      var reason = "Bild-Anhang konnte nicht eingebettet werden: " + (error && error.message ? error.message : error);
-      return addPlaceholderPage(mergedPdf, attachment, reason);
+      var reason = interpolate(s.reasonImageEmbedFailedTemplate, {
+        message: error && error.message ? error.message : error,
+      });
+      return addPlaceholderPage(mergedPdf, attachment, reason, strings);
     }
   }
 
   // item: das Office.js-Mailbox-Item (Read- oder Compose-Modus), das
-  // getAttachmentContentAsync bereitstellt.
-  async function embedAttachmentIntoPdf(item, mergedPdf, attachment) {
+  // getAttachmentContentAsync bereitstellt. strings: optionales Objekt mit
+  // bereits in der aktiven UI-Sprache aufgeloesten Textbausteinen (siehe
+  // DEFAULT_STRINGS oben fuer die erwarteten Keys) - fehlt es, gelten die
+  // deutschen Standardwerte.
+  async function embedAttachmentIntoPdf(item, mergedPdf, attachment, strings) {
+    var s = resolveStrings(strings);
     try {
       if (attachment.attachmentType === Office.MailboxEnums.AttachmentType.Cloud) {
-        return addPlaceholderPage(
-          mergedPdf,
-          attachment,
-          "Cloud-Anhang (Freigabelink): Inhalt kann in dieser Version nicht automatisch gelesen werden."
-        );
+        return addPlaceholderPage(mergedPdf, attachment, s.reasonCloudAttachment, strings);
       }
       if (attachment.attachmentType === Office.MailboxEnums.AttachmentType.Item) {
-        return addPlaceholderPage(
-          mergedPdf,
-          attachment,
-          "Eingebettetes Outlook-Element (z. B. Mail/Termin/Kontakt) wird in dieser Version nicht automatisch konvertiert."
-        );
+        return addPlaceholderPage(mergedPdf, attachment, s.reasonEmbeddedOutlookItem, strings);
       }
       if (typeof attachment.size === "number" && attachment.size > MAX_ATTACHMENT_BYTES) {
-        return addPlaceholderPage(
-          mergedPdf,
-          attachment,
-          "Anhang wurde uebersprungen: Groesse (" +
-            formatBytes(attachment.size) +
-            ") liegt ueber dem Limit von " +
-            formatBytes(MAX_ATTACHMENT_BYTES) +
-            " fuer diese Version."
-        );
+        var sizeReason = interpolate(s.reasonSizeLimitExceededTemplate, {
+          size: formatBytes(attachment.size, s.unknownSize),
+          limit: formatBytes(MAX_ATTACHMENT_BYTES, s.unknownSize),
+        });
+        return addPlaceholderPage(mergedPdf, attachment, sizeReason, strings);
       }
 
       var content = await getAttachmentContent(item, attachment.id);
 
       if (content.format !== Office.MailboxEnums.AttachmentContentFormat.Base64) {
-        return addPlaceholderPage(
-          mergedPdf,
-          attachment,
-          "Anhangsinhalt liegt in einem Format vor (" + content.format + "), das in dieser Version nicht verarbeitet wird."
-        );
+        var formatReason = interpolate(s.reasonUnsupportedContentFormatTemplate, { format: content.format });
+        return addPlaceholderPage(mergedPdf, attachment, formatReason, strings);
       }
 
       var bytes = base64ToUint8Array(content.content);
       var contentType = (attachment.contentType || "").toLowerCase();
 
       if (contentType === "application/pdf" || /\.pdf$/i.test(attachment.name || "")) {
-        return embedPdfAttachment(mergedPdf, bytes, attachment);
+        return embedPdfAttachment(mergedPdf, bytes, attachment, strings);
       }
 
       if (SUPPORTED_RASTER_IMAGE_TYPES.indexOf(contentType) !== -1) {
-        return embedImageAttachment(mergedPdf, bytes, contentType, attachment);
+        return embedImageAttachment(mergedPdf, bytes, contentType, attachment, strings);
       }
 
-      return addPlaceholderPage(
-        mergedPdf,
-        attachment,
-        "Automatische Konvertierung dieses Dateityps (" +
-          (attachment.contentType || "unbekannt") +
-          ") ist in dieser Version nicht implementiert."
-      );
+      var typeReason = interpolate(s.reasonUnsupportedFileTypeTemplate, {
+        type: attachment.contentType || s.unknownValue,
+      });
+      return addPlaceholderPage(mergedPdf, attachment, typeReason, strings);
     } catch (error) {
       console.error("Postfach2PDF: Anhang konnte nicht verarbeitet werden", attachment.name, error);
-      return addPlaceholderPage(
-        mergedPdf,
-        attachment,
-        "Anhang konnte nicht gelesen werden: " + (error && error.message ? error.message : error)
-      );
+      var readReason = interpolate(s.reasonReadFailedTemplate, {
+        message: error && error.message ? error.message : error,
+      });
+      return addPlaceholderPage(mergedPdf, attachment, readReason, strings);
     }
   }
 
@@ -333,7 +375,8 @@
   // reservierten Rand - eine Fusszeile wuerde dort echten Inhalt
   // ueberlagern). Zaehlung ("Seite X von Y") bleibt trotzdem korrekt,
   // uebersprungene Seiten werden nur nicht bezeichnet.
-  async function addPageNumbers(mergedPdf, skipPageIndices) {
+  async function addPageNumbers(mergedPdf, skipPageIndices, strings) {
+    var s = resolveStrings(strings);
     var skipSet = skipPageIndices || [];
     var font = await mergedPdf.embedFont(PDFLib.StandardFonts.Helvetica);
     var pages = mergedPdf.getPages();
@@ -345,7 +388,7 @@
         return;
       }
       var width = page.getWidth();
-      var text = "Seite " + (index + 1) + " von " + total;
+      var text = interpolate(s.footerPageOfTemplate, { current: index + 1, total: total });
       var size = 8;
       var textWidth = font.widthOfTextAtSize(text, size);
       page.drawLine({
@@ -361,7 +404,7 @@
         font: font,
         color: PDFLib.rgb(0.4, 0.4, 0.4),
       });
-      page.drawText("Postfach2PDF", {
+      page.drawText(s.footerBrand, {
         x: margin,
         y: margin - 18,
         size: size,

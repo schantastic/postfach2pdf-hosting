@@ -1,4 +1,4 @@
-/* global Office, PDFLib, Postfach2PdfCore, document, window */
+/* global Office, PDFLib, Postfach2PdfCore, Postfach2PdfI18n, document, window */
 
 (function () {
   "use strict";
@@ -6,7 +6,59 @@
   var el = {};
   var currentAttachments = [];
 
-  Office.onReady(function (info) {
+  var SETTINGS_KEYS = {
+    language: "mailpdf.language",
+  };
+
+  function t(key, params) {
+    return Postfach2PdfI18n.t(key, params);
+  }
+
+  // Siehe taskpane.js fuer den ausfuehrlichen Kommentar dazu, warum
+  // postfach2pdf-core.js diese bereits aufgeloesten Strings statt einer
+  // eigenen i18n.js-Abhaengigkeit bekommt.
+  function coreStrings() {
+    return {
+      placeholderHeading: t("pdfPlaceholderHeading"),
+      labelFileName: t("pdfLabelFileName"),
+      labelType: t("pdfLabelType"),
+      labelSize: t("pdfLabelSize"),
+      footerPageOfTemplate: t("pdfFooterPageOf"),
+      footerBrand: "Postfach2PDF",
+      unknownValue: t("unknownValue"),
+      unknownSize: t("unknownSize"),
+      reasonCloudAttachment: t("reasonCloudAttachment"),
+      reasonEmbeddedOutlookItem: t("reasonEmbeddedOutlookItem"),
+      reasonSizeLimitExceededTemplate: t("reasonSizeLimitExceeded"),
+      reasonUnsupportedContentFormatTemplate: t("reasonUnsupportedContentFormat"),
+      reasonPdfEmbedFailedTemplate: t("reasonPdfEmbedFailed"),
+      reasonImageEmbedFailedTemplate: t("reasonImageEmbedFailed"),
+      reasonUnsupportedFileTypeTemplate: t("reasonUnsupportedFileType"),
+      reasonReadFailedTemplate: t("reasonReadFailed"),
+    };
+  }
+
+  function getStoredLanguage() {
+    var settings = Office.context.roamingSettings;
+    if (!settings) {
+      return "auto";
+    }
+    return settings.get(SETTINGS_KEYS.language) || "auto";
+  }
+
+  function onLanguageChanged() {
+    var settings = Office.context.roamingSettings;
+    if (!settings) {
+      window.location.reload();
+      return;
+    }
+    settings.set(SETTINGS_KEYS.language, el.language.value);
+    settings.saveAsync(function () {
+      window.location.reload();
+    });
+  }
+
+  Office.onReady(async function (info) {
     if (info.host !== Office.HostType.Outlook) {
       return;
     }
@@ -21,6 +73,14 @@
     el.status = document.getElementById("mp-status");
     el.result = document.getElementById("mp-result");
     el.resultList = document.getElementById("mp-result-list");
+    el.language = document.getElementById("mp-language");
+
+    var storedLanguage = getStoredLanguage();
+    await Postfach2PdfI18n.init(storedLanguage === "auto" ? null : storedLanguage, "../lib/i18n/");
+    document.documentElement.lang = Postfach2PdfI18n.getActiveLanguage();
+    Postfach2PdfI18n.applyStaticTranslations(document);
+    el.language.value = storedLanguage;
+    el.language.addEventListener("change", onLanguageChanged);
 
     if (!Office.context.requirements.isSetSupported("Mailbox", "1.8")) {
       el.unsupported.hidden = false;
@@ -99,7 +159,7 @@
     } catch (error) {
       console.error("Postfach2PDF: Anhaenge konnten nicht geladen werden", error);
       setStatus(
-        "Anhaenge konnten nicht geladen werden: " + (error && error.message ? error.message : error),
+        t("statusLoadFailedPrefix", { message: error && error.message ? error.message : error }),
         "error"
       );
     }
@@ -130,15 +190,15 @@
 
       var nameSpan = document.createElement("span");
       nameSpan.className = "mp-attachment-name";
-      nameSpan.textContent = attachment.name || "(unbenannt)";
+      nameSpan.textContent = attachment.name || t("fallbackUnnamed");
 
       var detailSpan = document.createElement("span");
       detailSpan.className = "mp-attachment-detail";
       detailSpan.textContent =
-        (attachment.contentType || "unbekannter Typ") +
+        (attachment.contentType || t("fallbackUnknownType")) +
         " · " +
-        Postfach2PdfCore.formatBytes(attachment.size) +
-        (convertible ? "" : " · wird nicht unterstuetzt, bleibt unveraendert erhalten");
+        Postfach2PdfCore.formatBytes(attachment.size, t("unknownSize")) +
+        (convertible ? "" : t("unsupportedTypeSuffix"));
 
       label.appendChild(nameSpan);
       label.appendChild(detailSpan);
@@ -192,14 +252,16 @@
   }
 
   function buildMergedFileName(subject) {
-    var subjectPart = Postfach2PdfCore.sanitizeFileNamePart(subject || "Anhaenge") || "Anhaenge";
-    var stem = Postfach2PdfCore.sanitizeFileNameStem(subjectPart + "_Anhaenge");
+    var subjectPart =
+      Postfach2PdfCore.sanitizeFileNamePart(subject || t("fileNameFallbackAttachments")) ||
+      t("fileNameFallbackAttachments");
+    var stem = Postfach2PdfCore.sanitizeFileNameStem(subjectPart + "_" + t("fileNameFallbackAttachments"));
     return stem + ".pdf";
   }
 
   function buildSingleFileName(attachmentName, usedNames) {
-    var withoutExt = String(attachmentName || "Anhang").replace(/\.[^.]+$/, "");
-    var base = Postfach2PdfCore.sanitizeFileNamePart(withoutExt) || "Anhang";
+    var withoutExt = String(attachmentName || t("fileNameFallbackAttachment")).replace(/\.[^.]+$/, "");
+    var base = Postfach2PdfCore.sanitizeFileNamePart(withoutExt) || t("fileNameFallbackAttachment");
     var stem = Postfach2PdfCore.sanitizeFileNameStem(base);
     var candidate = stem + ".pdf";
     var counter = 2;
@@ -221,16 +283,16 @@
 
     for (var i = 0; i < attachments.length; i++) {
       var attachment = attachments[i];
-      setStatus("Verarbeite " + (i + 1) + "/" + attachments.length + ": " + attachment.name + " ...");
-      var outcome = await Postfach2PdfCore.embedAttachmentIntoPdf(item, mergedPdf, attachment);
+      setStatus(t("statusProcessingAttachment", { index: i + 1, total: attachments.length, name: attachment.name }));
+      var outcome = await Postfach2PdfCore.embedAttachmentIntoPdf(item, mergedPdf, attachment, coreStrings());
       if (outcome.status === "embedded") {
         embeddedOriginalIds.push(attachment.id);
-        results.push({ name: attachment.name, status: "embedded", detail: "in gemeinsame PDF eingebettet" });
+        results.push({ name: attachment.name, status: "embedded", detail: t("resultDetailMergedInto") });
       } else {
         results.push({
           name: attachment.name,
           status: "failed",
-          detail: outcome.reason + " (Original bleibt erhalten)",
+          detail: t("resultDetailFailedOriginalKept", { reason: outcome.reason }),
         });
       }
     }
@@ -239,7 +301,7 @@
       return;
     }
 
-    setStatus("Fuege gemeinsame PDF an die Nachricht an ...");
+    setStatus(t("statusAttachingMergedPdf"));
     var subject = await getSubjectAsync();
     var fileName = buildMergedFileName(subject);
     var bytes = await mergedPdf.save();
@@ -261,18 +323,18 @@
     var usedNames = [];
     for (var i = 0; i < attachments.length; i++) {
       var attachment = attachments[i];
-      setStatus("Verarbeite " + (i + 1) + "/" + attachments.length + ": " + attachment.name + " ...");
+      setStatus(t("statusProcessingAttachment", { index: i + 1, total: attachments.length, name: attachment.name }));
       var singleDoc = await PDFLib.PDFDocument.create();
       singleDoc.setProducer("Postfach2PDF (schantastic)");
       singleDoc.setCreator("Postfach2PDF");
       singleDoc.setCreationDate(new Date());
 
-      var outcome = await Postfach2PdfCore.embedAttachmentIntoPdf(item, singleDoc, attachment);
+      var outcome = await Postfach2PdfCore.embedAttachmentIntoPdf(item, singleDoc, attachment, coreStrings());
       if (outcome.status !== "embedded") {
         results.push({
           name: attachment.name,
           status: "failed",
-          detail: outcome.reason + " (Original bleibt erhalten)",
+          detail: t("resultDetailFailedOriginalKept", { reason: outcome.reason }),
         });
         continue;
       }
@@ -289,14 +351,14 @@
           console.error("Postfach2PDF: Original-Anhang konnte nicht entfernt werden", error);
         }
       }
-      results.push({ name: attachment.name, status: "embedded", detail: "als " + fileName + " angehaengt" });
+      results.push({ name: attachment.name, status: "embedded", detail: t("resultDetailAttachedAs", { fileName: fileName }) });
     }
   }
 
   async function onConvertClicked() {
     el.convert.disabled = true;
     el.result.hidden = true;
-    setStatus("Starte Konvertierung ...");
+    setStatus(t("statusStartingConversion"));
 
     var item = currentItem();
     var selected = getSelectedConvertibleAttachments();
@@ -313,14 +375,14 @@
           name: attachment.name,
           status: "skipped",
           detail: Postfach2PdfCore.isConvertibleAttachment(attachment)
-            ? "nicht ausgewaehlt"
-            : "Dateityp wird in dieser Version nicht unterstuetzt",
+            ? t("resultDetailNotSelected")
+            : t("resultDetailTypeNotSupported"),
         });
       });
 
     if (selected.length === 0) {
       renderResults(results);
-      setStatus("Keine konvertierbaren Anhaenge ausgewaehlt.", "error");
+      setStatus(t("errorNoConvertibleSelected"), "error");
       el.convert.disabled = false;
       return;
     }
@@ -337,14 +399,14 @@
         return r.status === "failed";
       }).length;
       if (failedCount === 0) {
-        setStatus("Anhaenge wurden konvertiert.", "success");
+        setStatus(t("statusConversionSuccess"), "success");
       } else {
-        setStatus(failedCount + " Anhang/Anhaenge konnten nicht konvertiert werden, siehe Ergebnis.", "error");
+        setStatus(Postfach2PdfI18n.plural("conversionPartialFailure", failedCount), "error");
       }
       await loadAttachments();
     } catch (error) {
       console.error("Postfach2PDF: Konvertierung fehlgeschlagen", error);
-      setStatus("Fehler bei der Konvertierung: " + (error && error.message ? error.message : error), "error");
+      setStatus(t("errorConversionPrefix", { message: error && error.message ? error.message : error }), "error");
     } finally {
       el.convert.disabled = false;
     }

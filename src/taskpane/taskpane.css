@@ -42,6 +42,21 @@ code,
   border-bottom: 1px solid var(--mp-border);
 }
 
+.mp-language-select {
+  margin-left: auto;
+}
+
+.mp-language-select select {
+  font-family: inherit;
+  font-size: 11px;
+  color: var(--mp-muted);
+  background: var(--mp-surface);
+  border: 1px solid var(--mp-border);
+  border-radius: var(--mp-radius-sm);
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
 .mp-header img {
   border-radius: 6px;
 }
