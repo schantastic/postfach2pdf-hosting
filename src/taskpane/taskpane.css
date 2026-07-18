@@ -64,15 +64,33 @@ code,
 .mp-header-text {
   display: flex;
   flex-direction: column;
-  line-height: 1.25;
+  justify-content: center;
+  line-height: 1.3;
+  /* min-width: 0 erlaubt dem Flex-Item, unter seine Inhaltsbreite zu
+     schrumpfen - sonst wuerde es den Sprach-Dropdown im schmalen
+     Outlook-Taskpane aus dem sichtbaren Bereich draengen. */
+  min-width: 0;
+  flex: 1;
+}
+
+.mp-header-company {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mp-navy);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mp-header-byline {
   font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 9px;
+  font-size: 8px;
   text-transform: uppercase;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.04em;
   color: var(--mp-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mp-app {
