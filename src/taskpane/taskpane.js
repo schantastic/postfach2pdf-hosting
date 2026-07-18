@@ -53,16 +53,44 @@
     return settings.get(SETTINGS_KEYS.language) || "auto";
   }
 
-  function onLanguageChanged() {
-    var settings = Office.context.roamingSettings;
-    if (!settings) {
-      window.location.reload();
-      return;
+  // Merkt sich, welcher der beiden "nicht unterstuetzt"-Texte zuletzt
+  // gesetzt wurde (die werden per JS gesetzt, nicht per data-i18n, siehe
+  // Office.onReady unten) - noetig, damit refreshDynamicContent() beim
+  // Sprachwechsel den richtigen Text neu uebersetzen kann.
+  var unsupportedReasonKey = null;
+
+  // Alles, was NICHT ueber data-i18n automatisch von
+  // applyStaticTranslations() erfasst wird (dynamisch aus Office.js-Daten
+  // gebaute Listen/Texte), muss nach einem Sprachwechsel manuell neu
+  // gerendert werden.
+  function refreshDynamicContent() {
+    if (unsupportedReasonKey) {
+      el.unsupported.textContent = t(unsupportedReasonKey);
     }
-    settings.set(SETTINGS_KEYS.language, el.language.value);
-    settings.saveAsync(function () {
-      window.location.reload();
-    });
+    if (!el.app.hidden) {
+      renderSummary();
+      renderAttachmentList();
+    }
+    if (!el.batch.hidden) {
+      renderBatchList();
+    }
+  }
+
+  // Kein window.location.reload() (mehr): ein voller Neuladen der Taskpane
+  // fuehrte in echtem Outlook dazu, dass die Sprachauswahl beim Neustart
+  // wieder auf "Automatisch" zurueckfiel - vermutlich eine Race Condition
+  // zwischen roamingSettings.saveAsync() und dem sofortigen Reload (analog
+  // zu den bereits dokumentierten Timing-Problemen in der echten, im
+  // Vergleich zu einer isolierten Testumgebung viel schwereren
+  // Outlook-Webseite, siehe STATUS.md). Stattdessen wird die Sprache direkt
+  // im laufenden Taskpane umgeschaltet, ganz ohne Neuladen.
+  async function onLanguageChanged() {
+    var lang = el.language.value;
+    await Postfach2PdfI18n.init(lang === "auto" ? null : lang, "../lib/i18n/");
+    document.documentElement.lang = Postfach2PdfI18n.getActiveLanguage();
+    Postfach2PdfI18n.applyStaticTranslations(document);
+    refreshDynamicContent();
+    persistSetting(SETTINGS_KEYS.language, lang);
   }
 
   Office.onReady(async function (info) {
@@ -104,8 +132,9 @@
     el.language.addEventListener("change", onLanguageChanged);
 
     if (!Office.context.requirements.isSetSupported("Mailbox", "1.8")) {
+      unsupportedReasonKey = "errorUnsupportedMailbox18";
       el.unsupported.hidden = false;
-      el.unsupported.textContent = t("errorUnsupportedMailbox18");
+      el.unsupported.textContent = t(unsupportedReasonKey);
       return;
     }
 
@@ -116,8 +145,9 @@
     } else if (Office.context.requirements.isSetSupported("Mailbox", "1.13")) {
       initBatchMode();
     } else {
+      unsupportedReasonKey = "errorUnsupportedNoSelection13";
       el.unsupported.hidden = false;
-      el.unsupported.textContent = t("errorUnsupportedNoSelection13");
+      el.unsupported.textContent = t(unsupportedReasonKey);
     }
   });
 

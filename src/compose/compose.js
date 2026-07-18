@@ -46,16 +46,33 @@
     return settings.get(SETTINGS_KEYS.language) || "auto";
   }
 
-  function onLanguageChanged() {
+  function persistSetting(key, value) {
     var settings = Office.context.roamingSettings;
     if (!settings) {
-      window.location.reload();
       return;
     }
-    settings.set(SETTINGS_KEYS.language, el.language.value);
-    settings.saveAsync(function () {
-      window.location.reload();
+    settings.set(key, value);
+    settings.saveAsync(function (result) {
+      if (result.status !== Office.AsyncResultStatus.Succeeded) {
+        console.warn("Postfach2PDF: Einstellung konnte nicht gespeichert werden", result.error);
+      }
     });
+  }
+
+  // Kein window.location.reload() (mehr): siehe ausfuehrlicher Kommentar
+  // in taskpane.js - ein voller Neuladen direkt nach saveAsync() fuehrte
+  // in echtem Outlook dazu, dass die Sprachauswahl wieder auf
+  // "Automatisch" zurueckfiel. Stattdessen wird die Sprache direkt im
+  // laufenden Taskpane umgeschaltet.
+  async function onLanguageChanged() {
+    var lang = el.language.value;
+    await Postfach2PdfI18n.init(lang === "auto" ? null : lang, "../lib/i18n/");
+    document.documentElement.lang = Postfach2PdfI18n.getActiveLanguage();
+    Postfach2PdfI18n.applyStaticTranslations(document);
+    if (!el.app.hidden) {
+      renderAttachmentList();
+    }
+    persistSetting(SETTINGS_KEYS.language, lang);
   }
 
   Office.onReady(async function (info) {
