@@ -67,13 +67,6 @@ code,
   line-height: 1.25;
 }
 
-.mp-header h1 {
-  font-size: 15px;
-  font-weight: 600;
-  margin: 0;
-  color: var(--mp-navy);
-}
-
 .mp-header-byline {
   font-family: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 9px;
